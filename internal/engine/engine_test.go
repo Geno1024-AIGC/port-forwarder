@@ -1,0 +1,114 @@
+package engine
+
+import (
+	"io"
+	"net"
+	"testing"
+	"time"
+)
+
+func startEcho(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				_, _ = io.Copy(c, c)
+			}(c)
+		}
+	}()
+	return ln.Addr().String()
+}
+
+func freePort(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	return ln.Addr().String()
+}
+
+func TestEngineAddForward(t *testing.T) {
+	target := startEcho(t)
+	listen := freePort(t)
+
+	e := New()
+	r, err := e.Add("echo", listen, target)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if r.Status != StatusRunning {
+		t.Fatalf("status = %s, want running", r.Status)
+	}
+
+	conn, err := net.DialTimeout("tcp", listen, 5*time.Second)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	payload := []byte("ping")
+	if _, err := conn.Write(payload); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(buf) != string(payload) {
+		t.Fatalf("got %q, want %q", buf, payload)
+	}
+}
+
+func TestEngineRemove(t *testing.T) {
+	listen := freePort(t)
+	e := New()
+	r, err := e.Add("x", listen, "127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	if err := e.Remove(r.ID); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	if _, err := net.DialTimeout("tcp", listen, time.Second); err == nil {
+		t.Fatal("listener still accepting after Remove")
+	}
+
+	if err := e.Remove(r.ID); err == nil {
+		t.Fatal("Remove of missing rule should fail")
+	}
+}
+
+func TestEngineListOrder(t *testing.T) {
+	e := New()
+	_, err := e.Add("a", freePort(t), "127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("Add a: %v", err)
+	}
+	_, err = e.Add("b", freePort(t), "127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("Add b: %v", err)
+	}
+	_ = e.Remove("1")
+
+	rules := e.List()
+	if len(rules) != 1 {
+		t.Fatalf("got %d rules, want 1", len(rules))
+	}
+	if rules[0].Name != "b" {
+		t.Fatalf("got rule %q, want b", rules[0].Name)
+	}
+}
