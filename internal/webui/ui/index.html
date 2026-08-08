@@ -15,19 +15,35 @@
   <main>
     <section class="panel">
       <h2>添加规则</h2>
+      <p class="hint">照着下面的转发路径，在空白处填写即可。</p>
       <form id="add-form" autocomplete="off">
-        <label>名称
-          <input id="name" name="name" placeholder="e.g. http-dev" required />
+        <div class="path-form" id="path-form">
+          <div class="pf-node pf-static">
+            <span class="pf-kicker">接入</span>
+            <span class="pf-big">客户端</span>
+          </div>
+          <span class="pf-arrow" aria-hidden="true"></span>
+          <label class="pf-node pf-input" for="listen">
+            <span class="pf-kicker">监听地址</span>
+            <input id="listen" name="listen" placeholder=":8080" required />
+          </label>
+          <span class="pf-arrow" aria-hidden="true"></span>
+          <div class="pf-node pf-relay">
+            <span class="pf-kicker">转发器</span>
+            <span class="pf-big">pf</span>
+          </div>
+          <span class="pf-arrow" aria-hidden="true"></span>
+          <label class="pf-node pf-input" for="target">
+            <span class="pf-kicker">目标地址</span>
+            <input id="target" name="target" placeholder="127.0.0.1:3000" required />
+          </label>
+        </div>
+        <label class="name-field" for="name">规则名称
+          <input id="name" name="name" placeholder="http-dev" required />
         </label>
-        <label>监听地址
-          <input id="listen" name="listen" placeholder="e.g. :8080" required />
-        </label>
-        <label>目标地址
-          <input id="target" name="target" placeholder="e.g. 127.0.0.1:3000" required />
-        </label>
+        <div id="form-error" class="error-banner" hidden></div>
         <button type="submit" class="primary">添加</button>
       </form>
-      <div id="path-preview" class="path-preview" aria-label="转发路径预览"></div>
     </section>
 
     <section class="panel">

@@ -86,9 +86,6 @@ func (e *Engine) SetRemoteBackend(b RemoteBackend) {
 // the rule and delegates registration to the tunnel backend; the status is
 // updated later via UpdateStatus. It returns the created rule.
 func (e *Engine) Add(typ RuleType, name, listen, target string) (*Rule, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	r := &Rule{
 		ID:     fmt.Sprintf("%d", e.nextID),
 		Type:   typ,
@@ -97,16 +94,22 @@ func (e *Engine) Add(typ RuleType, name, listen, target string) (*Rule, error) {
 		Target: target,
 		Status: StatusRunning,
 	}
+	e.mu.Lock()
 	e.nextID++
 	e.rules[r.ID] = r
+	e.mu.Unlock()
 
 	if typ == RuleTypeRemote {
-		if e.remote == nil {
-			r.Status = StatusError
+		e.mu.Lock()
+		remote := e.remote
+		e.mu.Unlock()
+		if remote == nil {
+			e.setStatus(r, StatusError)
 			return r, errors.New("remote forwarding backend not configured")
 		}
-		r.Status = StatusPending
-		e.remote.AddRemote(*r)
+		e.setStatus(r, StatusPending)
+		// Called without e.mu held: the backend may re-enter the engine.
+		remote.AddRemote(*r)
 		return r, nil
 	}
 
@@ -115,6 +118,13 @@ func (e *Engine) Add(typ RuleType, name, listen, target string) (*Rule, error) {
 		return r, err
 	}
 	return r, nil
+}
+
+// setStatus updates a rule's status under the engine lock.
+func (e *Engine) setStatus(r *Rule, s Status) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	r.Status = s
 }
 
 // Remove stops and deletes a rule by ID.

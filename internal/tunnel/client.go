@@ -52,11 +52,16 @@ func (c *Client) SetOnRule(fn OnRule) {
 }
 
 // Add registers a remote rule. It is stored immediately and (re)registered
-// whenever a connection to the server is (re)established.
+// whenever a connection to the server is (re)established. If a control
+// connection is already up, the rule is sent at once.
 func (c *Client) Add(rule ClientRule) {
 	c.mu.Lock()
 	c.rules[rule.ID] = &rule
+	enc := c.enc
 	c.mu.Unlock()
+	if enc != nil {
+		_ = enc.Encode(Frame{Type: FrameRegister, ID: rule.ID, Name: rule.Name, Listen: rule.Listen, Target: rule.Target})
+	}
 }
 
 // Remove deregisters a remote rule.
