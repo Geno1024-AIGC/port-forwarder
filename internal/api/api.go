@@ -29,6 +29,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 type ruleRequest struct {
+	Type   string `json:"type"`
 	Name   string `json:"name"`
 	Listen string `json:"listen"`
 	Target string `json:"target"`
@@ -58,7 +59,7 @@ func (s *Server) createRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	rule, err := s.eng.Add(req.Name, req.Listen, req.Target)
+	rule, err := s.eng.Add(engine.RuleType(req.Type), req.Name, req.Listen, req.Target)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return

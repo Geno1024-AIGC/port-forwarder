@@ -44,7 +44,7 @@ func TestEngineAddForward(t *testing.T) {
 	listen := freePort(t)
 
 	e := New()
-	r, err := e.Add("echo", listen, target)
+	r, err := e.Add(RuleTypeLocal, "echo", listen, target)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestEngineAddForward(t *testing.T) {
 func TestEngineRemove(t *testing.T) {
 	listen := freePort(t)
 	e := New()
-	r, err := e.Add("x", listen, "127.0.0.1:1")
+	r, err := e.Add(RuleTypeLocal, "x", listen, "127.0.0.1:1")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -94,11 +94,11 @@ func TestEngineRemove(t *testing.T) {
 
 func TestEngineListOrder(t *testing.T) {
 	e := New()
-	_, err := e.Add("a", freePort(t), "127.0.0.1:1")
+	_, err := e.Add(RuleTypeLocal, "a", freePort(t), "127.0.0.1:1")
 	if err != nil {
 		t.Fatalf("Add a: %v", err)
 	}
-	_, err = e.Add("b", freePort(t), "127.0.0.1:1")
+	_, err = e.Add(RuleTypeLocal, "b", freePort(t), "127.0.0.1:1")
 	if err != nil {
 		t.Fatalf("Add b: %v", err)
 	}
@@ -110,5 +110,54 @@ func TestEngineListOrder(t *testing.T) {
 	}
 	if rules[0].Name != "b" {
 		t.Fatalf("got rule %q, want b", rules[0].Name)
+	}
+}
+
+// fakeRemote records rules delegated to it by the engine.
+type fakeRemote struct {
+	added   []Rule
+	removed []string
+}
+
+func (f *fakeRemote) AddRemote(r Rule)       { f.added = append(f.added, r) }
+func (f *fakeRemote) RemoveRemote(id string) { f.removed = append(f.removed, id) }
+
+func TestEngineRemoteRuleDelegates(t *testing.T) {
+	e := New()
+	fake := &fakeRemote{}
+	e.SetRemoteBackend(fake)
+
+	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if r.Status != StatusPending {
+		t.Fatalf("status = %s, want pending", r.Status)
+	}
+	if len(fake.added) != 1 || fake.added[0].ID != r.ID {
+		t.Fatalf("backend not called with the rule: %+v", fake.added)
+	}
+
+	e.UpdateRemoteStatus(r.ID, ":8080", nil)
+	if got := e.List()[0].Status; got != StatusRunning {
+		t.Fatalf("status after ack = %s, want running", got)
+	}
+
+	if err := e.Remove(r.ID); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if len(fake.removed) != 1 || fake.removed[0] != r.ID {
+		t.Fatalf("backend RemoveRemote not called: %+v", fake.removed)
+	}
+}
+
+func TestEngineRemoteRuleWithoutBackend(t *testing.T) {
+	e := New()
+	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000")
+	if err == nil {
+		t.Fatal("expected error when no backend is configured")
+	}
+	if r.Status != StatusError {
+		t.Fatalf("status = %s, want error", r.Status)
 	}
 }

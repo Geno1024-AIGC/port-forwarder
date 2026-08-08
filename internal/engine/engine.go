@@ -14,19 +14,37 @@ import (
 type Status string
 
 const (
-	StatusStopped Status = "stopped"
+	StatusPending Status = "pending"
 	StatusRunning Status = "running"
+	StatusStopped Status = "stopped"
 	StatusError   Status = "error"
 )
 
-// Rule is a single forwarding rule: it listens on Listen and forwards
-// every accepted connection to Target.
+// RuleType discriminates local and remote forwarding rules.
+type RuleType string
+
+const (
+	RuleTypeLocal  RuleType = "local"
+	RuleTypeRemote RuleType = "remote"
+)
+
+// Rule is a single forwarding rule. Local rules bind a listener on this
+// machine; remote rules are registered with a server through the tunnel.
 type Rule struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Listen string `json:"listen"`
-	Target string `json:"target"`
-	Status Status `json:"status"`
+	ID     string   `json:"id"`
+	Type   RuleType `json:"type"`
+	Name   string   `json:"name"`
+	Listen string   `json:"listen"`
+	Target string   `json:"target"`
+	Status Status   `json:"status"`
+}
+
+// RemoteBackend registers remote rules on a server. It is provided by the
+// tunnel layer and injected by the application wiring. Implementations must
+// be safe for concurrent use.
+type RemoteBackend interface {
+	AddRemote(rule Rule)
+	RemoveRemote(id string)
 }
 
 // Engine owns a set of rules and their listeners.
@@ -37,6 +55,7 @@ type Engine struct {
 	stop    map[string]chan struct{}
 	nextID  int
 	onError func(id string, err error)
+	remote  RemoteBackend
 }
 
 // New creates an empty Engine.
@@ -49,32 +68,52 @@ func New() *Engine {
 	}
 }
 
-// SetErrorHandler registers a callback invoked when a listener errors out.
+// SetErrorHandler registers a callback invoked when a rule reports an error.
 func (e *Engine) SetErrorHandler(fn func(id string, err error)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onError = fn
 }
 
-// Add registers a new rule and starts it. It returns the created rule.
-func (e *Engine) Add(name, listen, target string) (*Rule, error) {
+// SetRemoteBackend attaches a tunnel backend used to service remote rules.
+func (e *Engine) SetRemoteBackend(b RemoteBackend) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.remote = b
+}
+
+// Add registers a new rule and starts it. For remote rules it only records
+// the rule and delegates registration to the tunnel backend; the status is
+// updated later via UpdateStatus. It returns the created rule.
+func (e *Engine) Add(typ RuleType, name, listen, target string) (*Rule, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	r := &Rule{
 		ID:     fmt.Sprintf("%d", e.nextID),
+		Type:   typ,
 		Name:   name,
 		Listen: listen,
 		Target: target,
 		Status: StatusRunning,
 	}
 	e.nextID++
+	e.rules[r.ID] = r
+
+	if typ == RuleTypeRemote {
+		if e.remote == nil {
+			r.Status = StatusError
+			return r, errors.New("remote forwarding backend not configured")
+		}
+		r.Status = StatusPending
+		e.remote.AddRemote(*r)
+		return r, nil
+	}
 
 	if err := e.startLocked(r); err != nil {
 		r.Status = StatusError
 		return r, err
 	}
-	e.rules[r.ID] = r
 	return r, nil
 }
 
@@ -87,9 +126,38 @@ func (e *Engine) Remove(id string) error {
 	if !ok {
 		return errors.New("rule not found")
 	}
+	if r.Type == RuleTypeRemote {
+		if e.remote != nil {
+			e.remote.RemoveRemote(id)
+		}
+		delete(e.rules, id)
+		return nil
+	}
 	e.stopLocked(r)
 	delete(e.rules, id)
 	return nil
+}
+
+// UpdateRemoteStatus reflects the tunnel backend's report for a remote rule.
+// actualListen may carry the address the server actually bound; a non-nil
+// error marks the rule as failed.
+func (e *Engine) UpdateRemoteStatus(id, actualListen string, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	r, ok := e.rules[id]
+	if !ok {
+		return
+	}
+	if err != nil {
+		r.Status = StatusError
+		e.reportError(id, err)
+		return
+	}
+	if actualListen != "" {
+		r.Listen = actualListen
+	}
+	r.Status = StatusRunning
 }
 
 // List returns all rules, in creation order.
@@ -107,12 +175,16 @@ func (e *Engine) List() []*Rule {
 	return out
 }
 
-// Restart stops and restarts every running rule, preserving state.
+// Restart stops and restarts every running local rule, preserving state.
+// Remote rules are left to the backend.
 func (e *Engine) Restart() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	for _, r := range e.rules {
+		if r.Type == RuleTypeRemote {
+			continue
+		}
 		e.stopLocked(r)
 		if err := e.startLocked(r); err != nil {
 			r.Status = StatusError
