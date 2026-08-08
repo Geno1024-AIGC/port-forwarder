@@ -17,19 +17,27 @@
       <h2>添加规则</h2>
       <p class="hint">照着下面的转发路径，在空白处填写即可。</p>
       <form id="add-form" autocomplete="off">
+        <div class="form-row">
+          <label for="goal-type">转发方式
+            <select id="goal-type" name="type">
+              <option value="local">本地转发 (ssh -L)</option>
+              <option value="remote">远程转发 (ssh -R)</option>
+            </select>
+          </label>
+        </div>
         <div class="path-form" id="path-form">
           <div class="pf-node pf-static">
             <span class="pf-kicker">接入</span>
-            <span class="pf-big">客户端</span>
+            <span class="pf-big" id="path-src">客户端</span>
           </div>
           <span class="pf-arrow" aria-hidden="true"></span>
           <label class="pf-node pf-input" for="listen">
-            <span class="pf-kicker">监听地址</span>
+            <span class="pf-kicker" id="path-listen-kicker">监听地址</span>
             <input id="listen" name="listen" placeholder=":8080" required />
           </label>
           <span class="pf-arrow" aria-hidden="true"></span>
           <div class="pf-node pf-relay">
-            <span class="pf-kicker">转发器</span>
+            <span class="pf-kicker" id="path-relay-kicker">转发器</span>
             <span class="pf-big">pf</span>
           </div>
           <span class="pf-arrow" aria-hidden="true"></span>
