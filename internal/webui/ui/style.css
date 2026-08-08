@@ -124,3 +124,39 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
   border-radius: 6px;
   font-size: 13px;
 }
+
+.path-preview { margin-top: 16px; }
+
+.path-diagram {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.path-diagram .pb-node { font-size: 15px; font-weight: 600; fill: var(--text); }
+.path-diagram .pb-sub { font-size: 12px; fill: var(--muted); }
+.path-diagram rect { transition: filter .2s; }
+
+.rule-list { display: flex; flex-direction: column; gap: 14px; }
+
+.rule-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.rule-name { font-weight: 600; font-size: 15px; }
+
+.rule-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
