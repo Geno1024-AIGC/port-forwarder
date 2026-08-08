@@ -16,11 +16,11 @@ import (
 	"github.com/Geno1024-AIGC/port-forwarder/internal/webui"
 )
 
-const version = "0.2.0"
+var version = "0.2.0"
 
 func main() {
 	var webAddr string
-	flag.StringVar(&webAddr, "web", ":7070", "address for the embedded web admin UI")
+	flag.StringVar(&webAddr, "web", ":28774", "address for the embedded web admin UI")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "port-forwarder %s\n\n", version)
 		fmt.Fprintf(flag.CommandLine.Output(), "A TCP port-forwarding daemon with an embedded web admin UI.\n\n")
