@@ -1,0 +1,4 @@
+/bin/
+/port-forwarder
+*.exe
+*.test
