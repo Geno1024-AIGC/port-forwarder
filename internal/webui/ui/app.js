@@ -41,29 +41,30 @@ function renderDiagram(opts) {
 
   const nodes = typ === 'remote'
     ? [
-        { label: '接入', sub: 'public', x: 24, y: 88, w: 110, h: 96 },
-        { label: '公网监听', sub: listen, x: 180, y: 88, w: 150, h: 96 },
-        { label: '隧道', sub: 'tunnel', x: 376, y: 52, w: 96, h: 148, accent: true },
-        { label: '转发器', sub: 'pf', x: 520, y: 88, w: 90, h: 96 },
-        { label: '目标', sub: target, x: 648, y: 88, w: 130, h: 96 },
+        { label: '接入', sub: 'public', x: 20, y: 80, w: 120, h: 110 },
+        { label: '公网监听', sub: listen, x: 190, y: 80, w: 150, h: 110 },
+        { label: '隧道', sub: 'tunnel', x: 410, y: 52, w: 110, h: 160, accent: true },
+        { label: '转发器', sub: 'pf', x: 590, y: 80, w: 100, h: 110 },
+        { label: '目标', sub: target, x: 760, y: 80, w: 130, h: 110 },
       ]
     : [
-        { label: '接入', sub: 'client', x: 8,   y: 88, w: 96,  h: 96 },
-        { label: '监听', sub: listen, x: 150, y: 88, w: 160, h: 96 },
-        { label: '转发器', sub: 'pf', x: 356, y: 52, w: 96, h: 148, accent: true },
-        { label: '目标', sub: target, x: 498, y: 88, w: 130, h: 96 },
+        { label: '接入', sub: 'client', x: 10, y: 80,  w: 100, h: 110 },
+        { label: '监听', sub: listen, x: 170, y: 80, w: 150, h: 110 },
+        { label: '转发器', sub: 'pf', x: 400, y: 52,  w: 110, h: 160, accent: true },
+        { label: '目标', sub: target, x: 600, y: 80,  w: 130, h: 110 },
       ];
 
-  const W = typ === 'remote' ? 808 : 660;
-  const lane = typ === 'remote' ? 198 : 136;
+  const W = typ === 'remote' ? 920 : 770;
+  const lane = typ === 'remote' ? 250 : 250;
+  const H = 300;
   const stroke = status === 'error' ? 'var(--err)' : 'var(--muted)';
 
   const nodeSvg = (n) => `
     <g>
-      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="14"
-            fill="${n.accent ? 'var(--accent)' : 'var(--panel)'}" stroke="${stroke}" stroke-width="1.5"/>
-      <text x="${n.x + n.w / 2}" y="${n.y + 42}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
-      <text x="${n.x + n.w / 2}" y="${n.y + 70}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
+      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="16"
+            fill="${n.accent ? 'var(--accent)' : 'var(--panel)'}" stroke="${stroke}" stroke-width="2"/>
+      <text x="${n.x + n.w / 2}" y="${n.y + 45}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
+      <text x="${n.x + n.w / 2}" y="${n.y + 76}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
     </g>`;
 
   const segments = [];
@@ -71,19 +72,19 @@ function renderDiagram(opts) {
     const a = nodes[i], b = nodes[i + 1];
     const x1 = a.x + a.w, x2 = b.x;
     segments.push(`
-      <line x1="${x1}" y1="${lane}" x2="${x2}" y2="${lane}" stroke="${stroke}" stroke-width="2"
+      <line x1="${x1}" y1="${lane}" x2="${x2}" y2="${lane}" stroke="${stroke}" stroke-width="2.5"
             marker-end="url(#pf-head)"/>
       <g>${[0, 0.8].map((off, k) => `
-        <circle r="4" fill="var(--accent)">
-          <animateMotion dur="1.6s" begin="${(i * 0.6 + k * 0.4).toFixed(1)}s" repeatCount="indefinite"
+        <circle r="5.5" fill="var(--accent)">
+          <animateMotion dur="${Math.max(1.2, (x2 - x1) / 260).toFixed(1)}s" begin="${(i * 0.5 + k * 0.35).toFixed(2)}s" repeatCount="indefinite"
             path="M ${x1} ${lane} H ${x2}"/>
         </circle>`).join('')}</g>`);
   }
 
   return `
-  <svg class="path-diagram" viewBox="0 0 ${W} 210" xmlns="http://www.w3.org/2000/svg" role="img">
+  <svg class="path-diagram" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">
     <defs>
-      <marker id="pf-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <marker id="pf-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
         <path d="M 0 1 L 9 5 L 0 9 z" fill="${stroke}"/>
       </marker>
     </defs>
