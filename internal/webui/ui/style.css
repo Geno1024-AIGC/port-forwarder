@@ -40,17 +40,56 @@ header h1 { font-size: 20px; margin: 0; }
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.err { color: var(--err); border-color: var(--err); }
 
+.layout {
+  display: flex;
+  gap: 0;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
+  align-items: flex-start;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 160px;
+  flex: 0 0 160px;
+  position: sticky;
+  top: 24px;
+}
+
+.nav-btn {
+  text-align: left;
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.nav-btn:hover { color: var(--text); background: var(--panel); }
+
+.nav-btn.active {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--accent);
+}
+
 main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
-  padding: 24px;
-  max-width: 960px;
-  margin: 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 @media (max-width: 760px) {
-  main { padding: 16px; }
+  .layout { flex-direction: column; padding: 16px; }
+  .sidebar { flex-direction: row; width: auto; flex: none; position: static; }
+  main { padding: 0; }
 }
 
 .panel {
@@ -150,6 +189,24 @@ input[type="text"], select {
   font-size: 14px;
   width: 100%;
 }
+
+.field-label { color: var(--muted); font-size: 13px; }
+
+.auth-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.auth-row label {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+.auth-row input[type="radio"] { width: auto; }
 
 .path-form {
   display: flex;

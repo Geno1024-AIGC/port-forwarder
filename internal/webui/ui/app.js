@@ -308,23 +308,33 @@ function rowOf(btn) {
   return btn.closest('.cred-item').querySelector('[data-probe-out]');
 }
 
-$('c-auth').addEventListener('change', () => {
-  const key = $('c-auth').value === 'key';
+function currentAuthType() {
+  const el = document.querySelector('input[name="c-auth"]:checked');
+  return el ? el.value : 'password';
+}
+
+function syncAuthRows() {
+  const key = currentAuthType() === 'key';
   $('c-key-row').hidden = !key;
   $('c-pass-row').hidden = key;
-});
+}
+
+for (const el of document.querySelectorAll('input[name="c-auth"]')) {
+  el.addEventListener('change', syncAuthRows);
+}
 
 $('cred-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errBox = $('cred-error');
   errBox.hidden = true;
+  const authType = currentAuthType();
   const payload = {
     name: $('c-name').value.trim(),
     host: $('c-host').value.trim(),
     user: $('c-user').value.trim(),
-    authType: $('c-auth').value,
+    authType: authType,
   };
-  if (payload.authType === 'key') {
+  if (authType === 'key') {
     payload.keyPath = $('c-keypath').value.trim();
   } else {
     payload.password = $('c-pass').value;
@@ -336,15 +346,29 @@ $('cred-form').addEventListener('submit', async (e) => {
       body: JSON.stringify(payload),
     });
     $('cred-form').reset();
-    $('c-auth').value = 'password';
-    $('c-key-row').hidden = true;
     $('c-pass-row').hidden = false;
+    $('c-key-row').hidden = true;
     await refreshCreds();
   } catch (err) {
     errBox.textContent = '保存失败: ' + (err.message || 'unknown error');
     errBox.hidden = false;
   }
 });
+
+// ——— sidebar view switching ————————————
+
+function switchView(view) {
+  const showRules = view === 'rules';
+  $('view-rules').hidden = !showRules;
+  $('view-creds').hidden = showRules;
+  for (const btn of document.querySelectorAll('.nav-btn')) {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  }
+}
+
+for (const btn of document.querySelectorAll('.nav-btn')) {
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+}
 
 // ——— boot —————————————————
 
@@ -362,6 +386,7 @@ async function boot() {
 
 syncTypeLabels();
 syncCredRow();
+syncAuthRows();
 updatePreviewFill();
 refreshCreds();
 boot();

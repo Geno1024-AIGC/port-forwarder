@@ -7,89 +7,107 @@
   <link rel="stylesheet" href="/ui/style.css" />
 </head>
 <body>
-  <header>
-    <h1>Port Forwarder</h1>
-    <span id="conn-status" class="badge">connecting…</span>
-  </header>
+  <div class="app">
+    <header>
+      <h1>Port Forwarder</h1>
+      <span id="conn-status" class="badge">connecting…</span>
+    </header>
 
-  <main>
-    <section class="panel">
-      <h2>添加规则</h2>
-      <p class="hint">照着下面的转发路径，在空白处填写即可。</p>
-      <form id="add-form" autocomplete="off">
-        <div class="form-row">
-          <label for="goal-type">转发方式
-            <select id="goal-type" name="type">
-              <option value="local">本地转发 (ssh -L)</option>
-              <option value="remote">远程转发 (ssh -R)</option>
-            </select>
-          </label>
-        </div>
-        <label class="form-row" for="credential" id="cred-row" hidden>
-          认证信息
-          <select id="credential" name="credential"></select>
-        </label>
-        <div class="path-form" id="path-form">
-          <div class="pf-node pf-static">
-            <span class="pf-kicker">接入</span>
-            <span class="pf-big" id="path-src">客户端</span>
+    <div class="layout">
+      <nav class="sidebar">
+        <button class="nav-btn active" data-view="rules">转发规则</button>
+        <button class="nav-btn" data-view="creds">认证信息</button>
+      </nav>
+
+      <main>
+        <section id="view-rules" class="view">
+          <div class="panel">
+            <h2>添加规则</h2>
+            <p class="hint">照着下面的转发路径，在空白处填写即可。</p>
+            <form id="add-form" autocomplete="off">
+              <div class="form-row">
+                <label for="goal-type">转发方式
+                  <select id="goal-type" name="type">
+                    <option value="local">本地转发 (ssh -L)</option>
+                    <option value="remote">远程转发 (ssh -R)</option>
+                  </select>
+                </label>
+              </div>
+              <label class="form-row" for="credential" id="cred-row" hidden>
+                认证信息
+                <select id="credential" name="credential"></select>
+              </label>
+              <div class="path-form" id="path-form">
+                <div class="pf-node pf-static">
+                  <span class="pf-kicker">接入</span>
+                  <span class="pf-big" id="path-src">客户端</span>
+                </div>
+                <span class="pf-arrow" aria-hidden="true"></span>
+                <label class="pf-node pf-input" for="listen">
+                  <span class="pf-kicker" id="path-listen-kicker">监听地址</span>
+                  <input id="listen" name="listen" placeholder=":8080" required />
+                </label>
+                <span class="pf-arrow" aria-hidden="true"></span>
+                <div class="pf-node pf-relay">
+                  <span class="pf-kicker" id="path-relay-kicker">转发器</span>
+                  <span class="pf-big">pf</span>
+                </div>
+                <span class="pf-arrow" aria-hidden="true"></span>
+                <label class="pf-node pf-input" for="target">
+                  <span class="pf-kicker">目标地址</span>
+                  <input id="target" name="target" placeholder="127.0.0.1:3000" required />
+                </label>
+              </div>
+              <label class="name-field" for="name">规则名称
+                <input id="name" name="name" placeholder="http-dev" required />
+              </label>
+              <div id="form-error" class="error-banner" hidden></div>
+              <button type="submit" class="primary">添加</button>
+            </form>
           </div>
-          <span class="pf-arrow" aria-hidden="true"></span>
-          <label class="pf-node pf-input" for="listen">
-            <span class="pf-kicker" id="path-listen-kicker">监听地址</span>
-            <input id="listen" name="listen" placeholder=":8080" required />
-          </label>
-          <span class="pf-arrow" aria-hidden="true"></span>
-          <div class="pf-node pf-relay">
-            <span class="pf-kicker" id="path-relay-kicker">转发器</span>
-            <span class="pf-big">pf</span>
+
+          <div class="panel">
+            <h2>规则列表</h2>
+            <div id="rules"></div>
           </div>
-          <span class="pf-arrow" aria-hidden="true"></span>
-          <label class="pf-node pf-input" for="target">
-            <span class="pf-kicker">目标地址</span>
-            <input id="target" name="target" placeholder="127.0.0.1:3000" required />
-          </label>
-        </div>
-        <label class="name-field" for="name">规则名称
-          <input id="name" name="name" placeholder="http-dev" required />
-        </label>
-        <div id="form-error" class="error-banner" hidden></div>
-        <button type="submit" class="primary">添加</button>
-      </form>
-    </section>
+        </section>
 
-    <section class="panel">
-      <h2>规则列表</h2>
-      <div id="rules"></div>
-    </section>
+        <section id="view-creds" class="view" hidden>
+          <div class="panel">
+            <h2>添加认证信息</h2>
+            <p class="hint">远程转发规则需要一个能登录公网 sshd 的认证信息。</p>
+            <form id="cred-form" class="cred-form" autocomplete="off">
+              <div class="form-row">
+                <label>名称 <input id="c-name" name="cname" placeholder="vps" required /></label>
+              </div>
+              <div class="form-row">
+                <label>主机 <input id="c-host" name="chost" placeholder="vps.example.com:22" required /></label>
+                <label>用户 <input id="c-user" name="cuser" placeholder="root" required /></label>
+              </div>
+              <div class="form-row auth-row">
+                <span class="field-label">认证方式</span>
+                <label><input type="radio" name="c-auth" value="password" checked /> 密码</label>
+                <label><input type="radio" name="c-auth" value="key" /> SSH 私钥</label>
+              </div>
+              <div class="form-row" id="c-pass-row">
+                <label>密码<input id="c-pass" name="cpass" type="password" /></label>
+              </div>
+              <div class="form-row" id="c-key-row" hidden>
+                <label>私钥路径<input id="c-keypath" name="ckeypath" placeholder="/root/.ssh/id_ed25519" /></label>
+              </div>
+              <div id="cred-error" class="error-banner" hidden></div>
+              <button type="submit" class="primary">保存认证</button>
+            </form>
+          </div>
 
-    <section class="panel">
-      <h2>认证信息</h2>
-      <p class="hint">远程转发规则需要一个能登录公网 sshd 的认证信息。</p>
-      <form id="cred-form" class="cred-form" autocomplete="off">
-        <div class="form-row">
-          <label>名称 <input id="c-name" name="cname" placeholder="vps" required /></label>
-        </div>
-        <div class="form-row">
-          <label>主机 <input id="c-host" name="chost" placeholder="vps.example.com:22" required /></label>
-          <label>用户 <input id="c-user" name="cuser" placeholder="root" required /></label>
-        </div>
-        <div class="form-row">
-          <label>认证方式
-            <select id="c-auth">
-              <option value="password">密码</option>
-              <option value="key">SSH 私钥</option>
-            </select>
-          </label>
-          <label id="c-pass-row">密码<input id="c-pass" name="cpass" type="password" /></label>
-          <label id="c-key-row" hidden>私钥路径<input id="c-keypath" name="ckeypath" placeholder="/root/.ssh/id_ed25519" /></label>
-        </div>
-        <div id="cred-error" class="error-banner" hidden></div>
-        <button type="submit" class="primary">保存认证</button>
-      </form>
-      <div id="creds"></div>
-    </section>
-  </main>
+          <div class="panel">
+            <h2>已有认证信息</h2>
+            <div id="creds"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
 
   <script src="/ui/app.js"></script>
 </body>
