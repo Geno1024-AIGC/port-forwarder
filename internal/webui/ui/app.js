@@ -35,45 +35,45 @@ function truncate(s, n) {
 //  "remote": public -> server listen -> tunnel -> pf -> target
 function renderDiagram(opts) {
   const typ = opts.typ || 'local';
-  const listen = truncate(opts.listen || '—', 14);
-  const target = truncate(opts.target || '—', 14);
+  const listen = truncate(opts.listen || '—', 16);
+  const target = truncate(opts.target || '—', 16);
   const status = opts.status;
   const stroke = status === 'error' ? 'var(--err)' : 'var(--muted)';
 
   const span = typ === 'remote'
     ? [
-        { label: '接入', sub: 'public', w: 88 },
-        { label: '公网监听', sub: listen, w: 88 },
-        { label: '隧道', sub: 'tunnel', w: 88, accent: true },
-        { label: '转发器', sub: 'pf', w: 88 },
-        { label: '目标', sub: target, w: 112 },
+        { label: '接入', sub: 'public', w: 66 },
+        { label: '公网监听', sub: listen, w: 66 },
+        { label: '隧道', sub: 'tunnel', w: 66, accent: true },
+        { label: '转发器', sub: 'pf', w: 66 },
+        { label: '目标', sub: target, w: 84 },
       ]
     : [
-        { label: '接入', sub: 'client', w: 84 },
-        { label: '监听', sub: listen, w: 84 },
-        { label: '转发器', sub: 'pf', w: 84, accent: true },
-        { label: '目标', sub: target, w: 112 },
+        { label: '接入', sub: 'client', w: 64 },
+        { label: '监听', sub: listen, w: 64 },
+        { label: '转发器', sub: 'pf', w: 64, accent: true },
+        { label: '目标', sub: target, w: 84 },
       ];
 
   // All nodes share one vertical center so the connectors line up.
-  const LANE = 90;
-  const GAP = 34;
-  const H = LANE + 46; // extends below the lane for the arrow heads
+  const LANE = 54;
+  const GAP = 18;
+  const H = LANE + 24; // extends below the lane for the arrow heads
   const W = span.reduce((sum, n) => sum + n.w, 0) + GAP * span.length + 8;
 
   let x = 4;
   const nodes = span.map((n) => {
-    const o = { ...n, x, y: LANE - 42, h: 74 };
+    const o = { ...n, x, y: LANE - 24, h: 40 };
     x += n.w + GAP;
     return o;
   });
 
   const nodeSvg = (n) => `
     <g>
-      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="12"
-            fill="${n.accent ? 'var(--accent)' : 'var(--panel)'}" stroke="${stroke}" stroke-width="2"/>
-      <text x="${n.x + n.w / 2}" y="${LANE - 12}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
-      <text x="${n.x + n.w / 2}" y="${LANE + 14}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
+      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="9"
+            fill="${n.accent ? 'var(--accent)' : 'var(--panel)'}" stroke="${stroke}" stroke-width="1.6"/>
+      <text x="${n.x + n.w / 2}" y="${LANE - 7}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
+      <text x="${n.x + n.w / 2}" y="${LANE + 9}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
     </g>`;
 
   const segments = [];
@@ -81,11 +81,11 @@ function renderDiagram(opts) {
     const a = nodes[i], b = nodes[i + 1];
     const x1 = a.x + a.w, x2 = b.x;
     segments.push(`
-      <line x1="${x1}" y1="${LANE}" x2="${x2}" y2="${LANE}" stroke="${stroke}" stroke-width="2.5"
+      <line x1="${x1}" y1="${LANE}" x2="${x2}" y2="${LANE}" stroke="${stroke}" stroke-width="1.8"
             marker-end="url(#pf-head)"/>
       <g>${[0, 0.8].map((off, k) => `
-        <circle r="5.5" fill="var(--accent)">
-          <animateMotion dur="${Math.max(1.2, (x2 - x1) / 260).toFixed(1)}s" begin="${(i * 0.5 + k * 0.35).toFixed(2)}s" repeatCount="indefinite"
+        <circle r="2.6" fill="var(--accent)">
+          <animateMotion dur="${Math.max(0.8, (x2 - x1) / 300).toFixed(1)}s" begin="${(i * 0.5 + k * 0.35).toFixed(2)}s" repeatCount="indefinite"
             path="M ${x1} ${LANE} H ${x2}"/>
         </circle>`).join('')}</g>`);
   }
@@ -93,7 +93,7 @@ function renderDiagram(opts) {
   return `
   <svg class="path-diagram" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">
     <defs>
-      <marker id="pf-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <marker id="pf-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M 0 1 L 9 5 L 0 9 z" fill="${stroke}"/>
       </marker>
     </defs>
