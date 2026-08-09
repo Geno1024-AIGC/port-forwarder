@@ -104,6 +104,12 @@ main {
   }
 }
 
+.view {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -288,14 +294,13 @@ input[type="text"], select {
 
 .name-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 
-.rule-list { display: flex; flex-direction: column; gap: 14px; }
+.rule-list { display: flex; flex-direction: column; gap: 0; }
 
 .rule-card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
 }
+.rule-card:last-child { border-bottom: none; }
 
 .rule-head {
   display: flex;
@@ -323,17 +328,16 @@ input[type="text"], select {
 
 .cred-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 
-.cred-list { display: flex; flex-direction: column; gap: 8px; }
+.cred-list { display: flex; flex-direction: column; gap: 0; }
 
 .cred-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
 }
+.cred-item:last-child { border-bottom: none; }
 
 .cred-name { font-weight: 600; }
 
