@@ -23,7 +23,7 @@ make test       # runs the test suite
 ## Usage
 
 ```sh
-./bin/port-forwarder-linux-amd64 -web :28774
+./bin/port-forwarder-linux-amd64 local -web :28774
 ```
 
 Then open <http://localhost:28774/> in a browser and add rules:
@@ -40,27 +40,29 @@ is `0x70 0x66`, which concatenated is `0x7066`, or `28774` in decimal.
 ## Reverse forwarding over SSH
 
 To expose a port of a machine behind NAT, without installing anything on the
-public host, use the `ssh` mode. It behaves like `ssh -R`: `pf` logs into a
-plain `sshd`, and the tunnel is carried inside ordinary SSH sessions.
+public host, run the daemon (`pf`) and manage everything from the web UI. A
+remote rule behaves like `ssh -R`: `pf` logs into a plain `sshd`, and the
+tunnel is carried inside ordinary SSH sessions.
 
-```sh
-# on the NAT-ed device that you control
-./bin/port-forwarder-linux-amd64 ssh -host vps.example.com:22
+Credentials are stored separately from rules so one SSH login can back many
+rules. In the web UI:
 
-# or with a password, skipping the ssh-agent:
-./bin/port-forwarder-linux-amd64 ssh -host vps.example.com -pass 'secret'
-```
-
-Then in the web admin UI, switch the form to "远程转发 (ssh -R)" and add a
-rule such as:
+1. In the **认证信息** (credentials) panel, add a credential: name, host,
+   user, and either a password or a private key path. Press **测试** to verify
+   `pf` can actually log in.
+2. Switch the rule form to **远程转发 (ssh -R)**, pick the credential, and add
+   a rule:
 
 | Field  | Meaning                           | Example             |
 | ------ | --------------------------------- | ------------------- |
 | listen | Public port to open on the server | `:7788`             |
 | target | Private address behind the NAT    | `192.168.1.2:7777`  |
 
-Connections to `vpn.example.com:7788` then reach `192.168.1.2:7777` through
-the SSH tunnel.
+Connections to `vps.example.com:7788` then reach `192.168.1.2:7777` through
+the SSH tunnel. Deleting a credential also removes every rule that used it.
+
+Credentials persist in `~/.config/pf/credentials.json` (0600). Rules are
+in-memory only.
 
 ### Prerequisites on the public host
 
@@ -71,18 +73,8 @@ The public host only runs a stock `sshd`. Two settings matter:
   public interface, set `GatewayPorts yes` in `/etc/ssh/sshd_config` and
   restart sshd. (Even when it is `no`, the reverse-forward still works for
   localhost connections.)
-- Credentials: authentication uses the ssh-agent first, then `-key`, then
-  `-pass`.
-
-### Flags
-
-| Flag        | Meaning                          |
-| ----------- | -------------------------------- |
-| `-host`     | sshd address, e.g. `vps.example.com:22` |
-| `-user`     | SSH login user                   |
-| `-key`      | Private key path                 |
-| `-passphrase` | Passphrase for an encrypted key |
-| `-pass`     | Login password (disables agent auth) |
+- Credentials: a password credential uses the password; a key credential
+  tries the ssh-agent first, then the configured key.
 
 ## REST API
 
@@ -93,6 +85,10 @@ The public host only runs a stock `sshd`. Two settings matter:
 | DELETE   | `/api/rules/{id}`        | Delete a rule      |
 | POST     | `/api/rules/{id}/restart`| Restart all rules  |
 | GET      | `/api/health`            | Health check       |
+| GET      | `/api/credentials`       | List credentials   |
+| POST     | `/api/credentials`       | Create a credential |
+| POST     | `/api/credentials/{id}/probe` | Test an SSH login |
+| DELETE   | `/api/credentials/{id}`  | Delete a credential |
 
 Create a rule:
 

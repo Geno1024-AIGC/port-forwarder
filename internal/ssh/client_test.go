@@ -159,7 +159,7 @@ func TestSSHBackendThroughEngine(t *testing.T) {
 	defer cancel()
 	go sc.Run(ctx)
 
-	rule, err := eng.Add(engine.RuleTypeRemote, "echo", ":0", echoAddr)
+	rule, err := eng.Add(engine.RuleTypeRemote, "echo", ":0", echoAddr, "")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -205,5 +205,86 @@ func TestSSHBackendThroughEngine(t *testing.T) {
 
 	if err := eng.Remove(rule.ID); err != nil {
 		t.Fatalf("remove: %v", err)
+	}
+}
+
+func TestManagerCredentialFlow(t *testing.T) {
+	srv := newSSHServer(t)
+	defer srv.ln.Close()
+	echoAddr := startEcho(t)
+
+	path := t.TempDir() + "/creds.json"
+	store, err := NewCredStore(path)
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	cred, err := store.Add(&Credential{
+		Name:     "vps",
+		Host:     srv.Addr(),
+		User:     "root",
+		AuthType: "password",
+		Password: "x",
+	})
+	if err != nil {
+		t.Fatalf("add cred: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mgr := NewManager(ctx, store)
+
+	if err := mgr.Probe(cred.ID); err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if err := mgr.Probe("nope"); err == nil {
+		t.Fatal("probe of missing credential should fail")
+	}
+
+	// Reload from disk to prove persistence.
+	reloaded, err := NewCredStore(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	got, ok := reloaded.Get(cred.ID)
+	if !ok || got.Password != "x" {
+		t.Fatalf("reloaded credential mismatch: %+v ok=%v", got, ok)
+	}
+
+	mgr.AddRemote(engine.Rule{ID: "r1", Name: "echo", Listen: ":0", Target: echoAddr, Credential: cred.ID})
+
+	var reversePort uint32
+	select {
+	case reversePort = <-srv.ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reverse forward never became ready")
+	}
+
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", u32(reversePort)), 5*time.Second)
+	if err != nil {
+		t.Fatalf("dial reverse: %v", err)
+	}
+	defer conn.Close()
+	const payload = "manager-echo"
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write([]byte(payload)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("read echo: %v", err)
+	}
+	if string(buf) != payload {
+		t.Fatalf("echo mismatch %q", buf)
+	}
+
+	if err := mgr.RemoveCredential(cred.ID); err != nil {
+		t.Fatalf("remove credential: %v", err)
+	}
+	afterDelete, err := NewCredStore(path)
+	if err != nil {
+		t.Fatalf("reload after delete: %v", err)
+	}
+	if _, ok := afterDelete.Get(cred.ID); ok {
+		t.Fatal("credential still present in store after RemoveCredential")
 	}
 }

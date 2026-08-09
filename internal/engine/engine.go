@@ -37,6 +37,9 @@ type Rule struct {
 	Listen string   `json:"listen"`
 	Target string   `json:"target"`
 	Status Status   `json:"status"`
+	// Credential names the SSH credential a remote rule should use. Empty
+	// means the remoted backend's default (e.g. the `pf server` tunnel).
+	Credential string `json:"credential,omitempty"`
 }
 
 // RemoteBackend registers remote rules on a server. It is provided by the
@@ -85,14 +88,15 @@ func (e *Engine) SetRemoteBackend(b RemoteBackend) {
 // Add registers a new rule and starts it. For remote rules it only records
 // the rule and delegates registration to the tunnel backend; the status is
 // updated later via UpdateStatus. It returns the created rule.
-func (e *Engine) Add(typ RuleType, name, listen, target string) (*Rule, error) {
+func (e *Engine) Add(typ RuleType, name, listen, target, credential string) (*Rule, error) {
 	r := &Rule{
-		ID:     fmt.Sprintf("%d", e.nextID),
-		Type:   typ,
-		Name:   name,
-		Listen: listen,
-		Target: target,
-		Status: StatusRunning,
+		ID:         fmt.Sprintf("%d", e.nextID),
+		Type:       typ,
+		Name:       name,
+		Listen:     listen,
+		Target:     target,
+		Credential: credential,
+		Status:     StatusRunning,
 	}
 	e.mu.Lock()
 	e.nextID++

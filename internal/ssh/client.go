@@ -92,6 +92,29 @@ func (c *Client) Remove(id string) {
 	delete(c.pending, id)
 }
 
+// Shutdown closes every open reverse listener and the underlying connection,
+// marking the client for no further reconnects. Safe to call multiple times.
+func (c *Client) Shutdown() {
+	c.mu.Lock()
+	conn := c.conn
+	c.conn = nil
+	lns := make([]*lnEntry, 0, len(c.lns))
+	for _, ent := range c.lns {
+		lns = append(lns, ent)
+	}
+	c.lns = make(map[string]*lnEntry)
+	c.pending = make(map[string]ClientRule)
+	c.mu.Unlock()
+
+	for _, ent := range lns {
+		_ = ent.ln.Close()
+		close(ent.stop)
+	}
+	if conn != nil {
+		_ = conn.Close()
+	}
+}
+
 // Run keeps the SSH connection alive, reconnecting with a short backoff and
 // re-establishing every rule, until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {

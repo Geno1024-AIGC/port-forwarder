@@ -64,19 +64,22 @@ func newSSHServer(t *testing.T) *sshServer {
 func (s *sshServer) Addr() string { return s.ln.Addr().String() }
 
 func (s *sshServer) serve() {
-	nc, err := s.ln.Accept()
-	if err != nil {
-		s.t.Errorf("ssh accept: %v", err)
-		return
+	for {
+		nc, err := s.ln.Accept()
+		if err != nil {
+			return
+		}
+		conn, chans, reqs, err := ssh.NewServerConn(nc, s.cfg)
+		if err != nil {
+			s.t.Errorf("ssh handshake: %v", err)
+			continue
+		}
+		s.mu.Lock()
+		s.conn = conn
+		s.mu.Unlock()
+		go s.handleRequests(reqs)
+		go s.handleChannels(chans)
 	}
-	conn, chans, reqs, err := ssh.NewServerConn(nc, s.cfg)
-	if err != nil {
-		s.t.Errorf("ssh handshake: %v", err)
-		return
-	}
-	s.conn = conn
-	go s.handleRequests(reqs)
-	s.handleChannels(chans)
 }
 
 func (s *sshServer) handleRequests(reqs <-chan *ssh.Request) {
@@ -163,7 +166,10 @@ func (s *sshServer) forward(c net.Conn, bindAddr string, port uint32) {
 		OriginAddr: "127.0.0.1",
 		OriginPort: 2222,
 	})
-	ch, reqs, err := s.conn.OpenChannel("forwarded-tcpip", payload)
+	s.mu.Lock()
+	conn := s.conn
+	s.mu.Unlock()
+	ch, reqs, err := conn.OpenChannel("forwarded-tcpip", payload)
 	if err != nil {
 		s.t.Errorf("open forwarded-tcpip: %v", err)
 		return

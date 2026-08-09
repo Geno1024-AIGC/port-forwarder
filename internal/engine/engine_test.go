@@ -44,7 +44,7 @@ func TestEngineAddForward(t *testing.T) {
 	listen := freePort(t)
 
 	e := New()
-	r, err := e.Add(RuleTypeLocal, "echo", listen, target)
+	r, err := e.Add(RuleTypeLocal, "echo", listen, target, "")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestEngineAddForward(t *testing.T) {
 func TestEngineRemove(t *testing.T) {
 	listen := freePort(t)
 	e := New()
-	r, err := e.Add(RuleTypeLocal, "x", listen, "127.0.0.1:1")
+	r, err := e.Add(RuleTypeLocal, "x", listen, "127.0.0.1:1", "")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -94,11 +94,11 @@ func TestEngineRemove(t *testing.T) {
 
 func TestEngineListOrder(t *testing.T) {
 	e := New()
-	_, err := e.Add(RuleTypeLocal, "a", freePort(t), "127.0.0.1:1")
+	_, err := e.Add(RuleTypeLocal, "a", freePort(t), "127.0.0.1:1", "")
 	if err != nil {
 		t.Fatalf("Add a: %v", err)
 	}
-	_, err = e.Add(RuleTypeLocal, "b", freePort(t), "127.0.0.1:1")
+	_, err = e.Add(RuleTypeLocal, "b", freePort(t), "127.0.0.1:1", "")
 	if err != nil {
 		t.Fatalf("Add b: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestEngineRemoteRuleDelegates(t *testing.T) {
 	fake := &fakeRemote{}
 	e.SetRemoteBackend(fake)
 
-	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000")
+	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000", "")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestEngineRemoteRuleDelegates(t *testing.T) {
 
 func TestEngineRemoteRuleWithoutBackend(t *testing.T) {
 	e := New()
-	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000")
+	r, err := e.Add(RuleTypeRemote, "web", ":8080", "127.0.0.1:3000", "")
 	if err == nil {
 		t.Fatal("expected error when no backend is configured")
 	}

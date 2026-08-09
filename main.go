@@ -18,7 +18,6 @@ import (
 	sshx "github.com/Geno1024-AIGC/port-forwarder/internal/ssh"
 	"github.com/Geno1024-AIGC/port-forwarder/internal/tunnel"
 	"github.com/Geno1024-AIGC/port-forwarder/internal/webui"
-	"golang.org/x/crypto/ssh"
 )
 
 var version = "0.3.0"
@@ -33,8 +32,6 @@ func main() {
 		runServer(os.Args[2:])
 	case "client":
 		runClient(os.Args[2:])
-	case "ssh":
-		runSSH(os.Args[2:])
 	case "local", "daemon":
 		runLocal(os.Args[2:])
 	default:
@@ -42,7 +39,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  pf                  local daemon with web UI")
 		fmt.Fprintln(os.Stderr, "  pf server [flags]   public endpoint")
 		fmt.Fprintln(os.Stderr, "  pf client [flags]   tunnel into a server")
-		fmt.Fprintln(os.Stderr, "  pf ssh [flags]      reverse forward via a plain sshd (ssh -R)")
 		os.Exit(2)
 	}
 }
@@ -147,7 +143,12 @@ func runClient(args []string) {
 	defer stop()
 	go tc.Run(ctx)
 
-	serveAdminWeb(web, eng)
+	store, err := sshx.NewCredStore("")
+	if err != nil {
+		slog.Error("credentials", "err", err)
+		os.Exit(1)
+	}
+	serveAdminWeb(web, eng, sshx.NewManager(ctx, store))
 }
 
 // clientBackend bridges engine.RemoteBackend and tunnel.Client.
@@ -172,127 +173,45 @@ func (b *clientBackend) RemoveRemote(id string) {
 	b.client.Remove(id)
 }
 
-// --- ssh reverse forwarding ---------------------------------------------
-
-// runSSH hosts the admin UI on the local device and services "remote" rules
-// by reverse-forwarding through a plain sshd, so nothing needs to run on the
-// cloud host besides sshd itself.
-func runSSH(args []string) {
-	fs := flag.NewFlagSet("ssh", flag.ExitOnError)
-	var remote string
-	var user string
-	var key string
-	var passphrase string
-	var password string
-	var web string
-	fs.StringVar(&remote, "host", "", "sshd address, e.g. vps.example.com:22 (required)")
-	fs.StringVar(&user, "user", os.Getenv("USER"), "SSH login user")
-	fs.StringVar(&key, "key", "", "path to SSH private key (otherwise ssh-agent is tried)")
-	fs.StringVar(&passphrase, "passphrase", "", "passphrase for an encrypted key")
-	fs.StringVar(&password, "pass", "", "SSH login password (overrides agent)")
-	fs.StringVar(&web, "web", ":28774", "address for the embedded web admin UI")
-	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "port-forwarder ssh [flags]")
-		fs.PrintDefaults()
-	}
-	fs.Parse(args)
-
-	if remote == "" && fs.NArg() > 0 {
-		remote = fs.Arg(0)
-	}
-	if remote == "" {
-		fmt.Fprintln(os.Stderr, "port-forwarder ssh: -host (or positional ssh host) is required")
-		os.Exit(2)
-	}
-
-	var auth []ssh.AuthMethod
-	if password != "" {
-		auth = append(auth, sshx.PasswordAuth(password))
-	} else {
-		// Prefer agent so keys on the machine need no key file at all.
-		if m, err := sshx.AgentAuth(); err == nil {
-			auth = append(auth, m)
-		}
-		if key != "" {
-			m, err := sshx.KeyAuth(key, passphrase)
-			if err != nil {
-				fs.Usage()
-				return
-			}
-			auth = append(auth, m)
-		}
-	}
-	if len(auth) == 0 {
-		fmt.Fprintln(os.Stderr, "port-forwarder ssh: no credentials; use -key or -pass")
-		os.Exit(2)
-	}
-
-	eng := engine.New()
-	sc := sshx.NewClient(normalizeAddr(remote), user, auth)
-	adapter := &sshAdapter{client: sc}
-	eng.SetRemoteBackend(adapter)
-	adapter.onStatus = func(id, listen string, err error) {
-		eng.UpdateRemoteStatus(id, listen, err)
-	}
-	sc.SetOnRule(func(id, listen string, err error) {
-		adapter.onStatus(id, listen, err)
-	})
-	eng.SetErrorHandler(func(id string, err error) {
-		slog.Error("forward rule error", "id", id, "err", err)
-	})
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go sc.Run(ctx)
-
-	serveAdminWeb(web, eng)
-}
-
-// sshAdapter bridges engine.RemoteBackend and the SSH reverse-forward client.
-type sshAdapter struct {
-	client   *sshx.Client
-	onStatus func(id, listen string, err error)
-}
-
-func (b *sshAdapter) AddRemote(rule engine.Rule) {
-	b.client.Add(sshx.ClientRule{
-		ID:     rule.ID,
-		Name:   rule.Name,
-		Listen: rule.Listen,
-		Target: rule.Target,
-	})
-	if b.onStatus != nil {
-		b.onStatus(rule.ID, "", nil)
-	}
-}
-
-func (b *sshAdapter) RemoveRemote(id string) {
-	b.client.Remove(id)
-}
-
 // --- local daemon -----------------------------------------------------------
 
 func runLocal(args []string) {
 	fs := flag.NewFlagSet("local", flag.ExitOnError)
 	var web string
+	var credsPath string
 	fs.StringVar(&web, "web", ":28774", "address for the embedded web admin UI")
+	fs.StringVar(&credsPath, "creds", sshx.DefaultCredPath(), "file where SSH credentials are stored")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "port-forwarder [flags]")
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	store, err := sshx.NewCredStore(credsPath)
+	if err != nil {
+		slog.Error("load credentials", "err", err)
+		os.Exit(1)
+	}
+	mgr := sshx.NewManager(ctx, store)
+	mgr.SetOnRule(func(id, listen string, err error) {
+		slog.Error("remote rule status", "id", id, "listen", listen, "err", err)
+	})
+
 	eng := engine.New()
+	eng.SetRemoteBackend(mgr)
 	eng.SetErrorHandler(func(id string, err error) {
 		slog.Error("forward rule error", "id", id, "err", err)
 	})
-	serveAdminWeb(web, eng)
+	serveAdminWeb(web, eng, mgr)
 }
 
 // serveAdminWeb hosts the rule-management UI plus REST API until a signal.
-func serveAdminWeb(addr string, eng *engine.Engine) {
+func serveAdminWeb(addr string, eng *engine.Engine, mgr *sshx.Manager) {
 	mux := http.NewServeMux()
-	mux.Handle("/api/", api.New(eng).Handler())
+	mux.Handle("/api/", api.New(eng, mgr).Handler())
 	mux.Handle("/ui/", http.StripPrefix("/ui/", webui.Handler()))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
 	slog.Info("web UI listening", "addr", addr)

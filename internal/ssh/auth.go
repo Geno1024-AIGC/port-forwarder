@@ -21,9 +21,16 @@ func KeyAuth(path, passphrase string) (ssh.AuthMethod, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read key %s: %w", path, err)
 	}
-	signer, err := ssh.ParsePrivateKeyWithPassphrase(data, []byte(passphrase))
+	var signer ssh.Signer
+	signer, err = ssh.ParsePrivateKey(data)
 	if err != nil {
-		return nil, fmt.Errorf("parse key %s: %w", path, err)
+		if passphrase == "" {
+			return nil, fmt.Errorf("parse key %s: %w", path, err)
+		}
+		signer, err = ssh.ParsePrivateKeyWithPassphrase(data, []byte(passphrase))
+		if err != nil {
+			return nil, fmt.Errorf("parse key %s: %w", path, err)
+		}
 	}
 	return ssh.PublicKeys(signer), nil
 }
@@ -45,4 +52,37 @@ func AgentAuth() (ssh.AuthMethod, error) {
 		return nil, fmt.Errorf("connect ssh-agent: %w", err)
 	}
 	return ssh.PublicKeysCallback(agent.NewClient(conn).Signers), nil
+}
+
+// CredentialAuth resolves the auth methods for a stored credential: a
+// password credential uses Password; otherwise it tries the ssh-agent first
+// and then the configured private key.
+func CredentialAuth(c *Credential) ([]ssh.AuthMethod, error) {
+	if c == nil {
+		return nil, fmt.Errorf("empty credential")
+	}
+	if c.AuthType == "password" {
+		if c.Password == "" {
+			return nil, fmt.Errorf("credential %q has no password", c.Name)
+		}
+		return []ssh.AuthMethod{ssh.Password(c.Password)}, nil
+	}
+	var methods []ssh.AuthMethod
+	if m, err := AgentAuth(); err == nil {
+		methods = append(methods, m)
+	}
+	if c.KeyPath != "" {
+		if c.AuthType != "" && c.AuthType != "key" {
+			return nil, fmt.Errorf("credential %q: unknown auth type %q", c.Name, c.AuthType)
+		}
+		m, err := KeyAuth(c.KeyPath, c.Passphrase)
+		if err != nil {
+			return nil, err
+		}
+		methods = append(methods, m)
+	}
+	if len(methods) == 0 {
+		return nil, fmt.Errorf("credential %q: no authentication configured", c.Name)
+	}
+	return methods, nil
 }

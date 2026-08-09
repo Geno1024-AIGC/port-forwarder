@@ -23,7 +23,7 @@ make test       # 运行测试套件
 ## 使用方法
 
 ```sh
-./bin/port-forwarder-linux-amd64 -web :28774
+./bin/port-forwarder-linux-amd64 local -web :28774
 ```
 
 然后在浏览器中打开 <http://localhost:28774/>，添加规则：
@@ -38,41 +38,28 @@ make test       # 运行测试套件
 
 ## 通过 SSH 反向转发
 
-若要将 NAT 内的一台机器上的端口暴露到公网，且公网主机上不安装任何程序，可以使用 `ssh` 模式。其行为类似 `ssh -R`：`pf` 登录一台普通的 `sshd`，隧道在普通 SSH 会话内传输。
+若要将 NAT 内的一台机器上的端口暴露到公网，且公网主机上不安装任何程序，请运行守护进程 `pf` 并在 Web 界面中管理一切。远程转发规则的行为类似 `ssh -R`：`pf` 登录一台普通的 `sshd`，隧道在普通 SSH 会话内传输。
 
-```sh
-# 在 NAT 内网、你拥有控制权的设备上运行
-./bin/port-forwarder-linux-amd64 ssh -host vps.example.com:22
+认证信息与规则分开保存，一份 SSH 登录信息可以支撑多条规则。步骤如下：
 
-# 或者指定密码，跳过 ssh-agent：
-./bin/port-forwarder-linux-amd64 ssh -host vps.example.com -pass 'secret'
-```
-
-随后在 Web 管理界面中，把表单切换到“远程转发（ssh -R）”，添加一条规则，例如：
+1. 在 Web 界面的“认证信息”面板中添加一条凭据：名称、主机、用户，以及密码或私钥路径。点击“测试”按钮验证 `pf` 确实能登录该主机。
+2. 将表单切换到“远程转发（ssh -R）”，选择刚添加的凭据，然后添加一条规则：
 
 | 字段   | 含义                              | 示例                |
 | ------ | --------------------------------- | ------------------- |
 | listen | 公网服务器上开放的端口             | `:7788`             |
 | target | NAT 内网的私有地址                | `192.168.1.2:7777`  |
 
-此时访问 `vps.example.com:7788`，数据会通过 SSH 隧道到达内网的 `192.168.1.2:7777`。
+此时访问 `vps.example.com:7788`，数据会通过 SSH 隧道到达内网的 `192.168.1.2:7777`。删除认证信息时，所有使用它的规则也会一并删除。
+
+凭据保存在 `~/.config/pf/credentials.json`（权限 0600）。规则仅保存在内存中。
 
 ### 公网主机的准备工作
 
 公网主机只需运行标准 `sshd`，但有两个关键点：
 
 - **GatewayPorts**——默认情况下，`ssh -R` 会把远程端口绑定在 `127.0.0.1` 上，公网无法访问。若要在公网接口上暴露该端口，请在 `/etc/ssh/sshd_config` 中设置 `GatewayPorts yes`，然后重启 sshd。（即使设置为 `no`，反向转发对回环连接仍然有效。）
-- **凭据**——认证顺序为：先尝试 ssh-agent，再尝试 `-key`，最后是 `-pass`。
-
-### 参数
-
-| 参数          | 含义                          |
-| ------------- | ----------------------------- |
-| `-host`       | sshd 地址，例如 `vps.example.com:22` |
-| `-user`       | SSH 登录用户                  |
-| `-key`        | 私钥文件路径                  |
-| `-passphrase` | 加密私钥的口令                |
-| `-pass`       | SSH 登录密码（会禁用 agent 认证） |
+- **凭据**——以密码方式认证的凭据使用密码；以私钥方式认证的凭据会先尝试 ssh-agent，再尝试配置的私钥。
 
 ## REST API
 
@@ -83,6 +70,10 @@ make test       # 运行测试套件
 | DELETE   | `/api/rules/{id}`           | 删除规则             |
 | POST     | `/api/rules/{id}/restart`   | 重启所有规则         |
 | GET      | `/api/health`               | 健康检查             |
+| GET      | `/api/credentials`          | 列出认证信息         |
+| POST     | `/api/credentials`          | 创建认证信息         |
+| POST     | `/api/credentials/{id}/probe` | 验证 SSH 登录       |
+| DELETE   | `/api/credentials/{id}`     | 删除认证信息         |
 
 创建规则：
 
