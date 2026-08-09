@@ -148,6 +148,8 @@ button {
 
 button.primary { background: var(--accent); border-color: var(--accent); }
 
+button.secondary { color: var(--muted); }
+
 button:hover { filter: brightness(1.1); }
 
 button.danger:hover { border-color: var(--err); color: var(--err); }
@@ -353,6 +355,20 @@ input[type="text"], select {
   padding: 3px 10px;
   cursor: pointer;
 }
+
+.edit {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: transparent;
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.edit:hover { color: var(--text); border-color: var(--muted); }
+
+.btn-row { display: flex; gap: 10px; }
 
 .probe-result { font-size: 12px; }
 .probe-result.ok { color: var(--ok); }

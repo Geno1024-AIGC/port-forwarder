@@ -272,6 +272,7 @@ function renderCreds(creds) {
       <span class="mono">${escapeHtml(c.user)}@${escapeHtml(c.host)}</span>
       <span class="badge">${escapeHtml(c.authType || 'password')}</span>
       <button class="probe" data-probe="${escapeHtml(c.id)}">测试</button>
+      <button class="edit" data-edit-cred="${escapeHtml(c.id)}">编辑</button>
       <button class="danger" data-del-cred="${escapeHtml(c.id)}">删除</button>
       <span class="probe-result" data-probe-out></span>`;
     list.appendChild(row);
@@ -302,6 +303,9 @@ function renderCreds(creds) {
       }
     });
   }
+  for (const btn of container.querySelectorAll('[data-edit-cred]')) {
+    btn.addEventListener('click', () => editCredential(btn.dataset.editCred));
+  }
 }
 
 function rowOf(btn) {
@@ -320,8 +324,78 @@ function syncAuthRows() {
 }
 
 for (const el of document.querySelectorAll('input[name="c-auth"]')) {
-  el.addEventListener('change', syncAuthRows);
+  el.addEventListener('change', () => {
+    syncAuthRows();
+    resetKeyPick();
+  });
 }
+
+let editingCredID = null;
+
+function resetKeyPick() {
+  $('c-keyfile').value = '';
+  $('c-keypath-label').hidden = true;
+  $('c-keypath').value = '';
+}
+
+function enterEditMode(cred) {
+  editingCredID = cred.id;
+  $('c-name').value = cred.name || '';
+  $('c-host').value = cred.host || '';
+  $('c-user').value = cred.user || '';
+  const radio = document.querySelector(`input[name="c-auth"][value="${cred.authType || 'password'}"]`);
+  if (radio) radio.checked = true;
+  syncAuthRows();
+  resetKeyPick();
+  if (cred.authType === 'key' && cred.keyPath) {
+    $('c-keypath-label').hidden = false;
+    $('c-keypath').value = cred.keyPath;
+  }
+  $('cred-submit').textContent = '更新认证';
+  $('cred-cancel').hidden = false;
+  $('view-creds').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('c-name').focus();
+}
+
+function exitEditMode() {
+  editingCredID = null;
+  $('cred-form').reset();
+  syncAuthRows();
+  resetKeyPick();
+  $('cred-submit').textContent = '保存认证';
+  $('cred-cancel').hidden = true;
+}
+
+async function editCredential(id) {
+  try {
+    const list = await api('/api/credentials');
+    const cred = list.find((c) => c.id === id);
+    if (!cred) throw new Error('未找到该认证');
+    enterEditMode(cred);
+  } catch (err) {
+    alert('读取失败: ' + (err.message || err));
+  }
+}
+
+$('cred-cancel').addEventListener('click', () => {
+  exitEditMode();
+  $('cred-error').hidden = true;
+});
+
+// Read the picked key file into memory for upload.
+let pickedKey = null;
+$('c-keyfile').addEventListener('change', async () => {
+  const file = ($('c-keyfile').files || [])[0];
+  if (!file) {
+    pickedKey = null;
+    $('c-keypath-label').hidden = true;
+    $('c-keypath').value = '';
+    return;
+  }
+  pickedKey = new Uint8Array(await file.arrayBuffer());
+  $('c-keypath-label').hidden = false;
+  $('c-keypath').value = '已选择: ' + file.name + '（将在保存时上传）';
+});
 
 $('cred-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -335,19 +409,19 @@ $('cred-form').addEventListener('submit', async (e) => {
     authType: authType,
   };
   if (authType === 'key') {
-    payload.keyPath = $('c-keypath').value.trim();
+    if (pickedKey) payload.keyContent = Array.from(pickedKey);
   } else {
     payload.password = $('c-pass').value;
   }
   try {
-    await api('/api/credentials', {
-      method: 'POST',
+    const opts = {
+      method: editingCredID ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
-    $('cred-form').reset();
-    $('c-pass-row').hidden = false;
-    $('c-key-row').hidden = true;
+    };
+    const url = editingCredID ? '/api/credentials/' + editingCredID : '/api/credentials';
+    await api(url, opts);
+    exitEditMode();
     await refreshCreds();
   } catch (err) {
     errBox.textContent = '保存失败: ' + (err.message || 'unknown error');

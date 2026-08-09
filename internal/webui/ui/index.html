@@ -93,10 +93,20 @@
                 <label>密码<input id="c-pass" name="cpass" type="password" /></label>
               </div>
               <div class="form-row" id="c-key-row" hidden>
-                <label>私钥路径<input id="c-keypath" name="ckeypath" placeholder="/root/.ssh/id_ed25519" /></label>
+                <label>
+                  选择私钥文件
+                  <input id="c-keyfile" name="ckeyfile" type="file" />
+                </label>
+                <label id="c-keypath-label" hidden>
+                  已保存位置
+                  <input id="c-keypath" name="ckeypath" readonly />
+                </label>
               </div>
               <div id="cred-error" class="error-banner" hidden></div>
-              <button type="submit" class="primary">保存认证</button>
+              <div class="btn-row">
+                <button type="submit" class="primary" id="cred-submit">保存认证</button>
+                <button type="button" class="secondary" id="cred-cancel" hidden>取消</button>
+              </div>
             </form>
           </div>
 
