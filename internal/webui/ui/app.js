@@ -330,12 +330,16 @@ for (const el of document.querySelectorAll('input[name="c-auth"]')) {
   });
 }
 
+// read picked key content (primary input is the typed path; a picked file
+// uploads content instead since browsers hide the real absolute path).
+let pickedKey = null;
+
 let editingCredID = null;
 
 function resetKeyPick() {
   $('c-keyfile').value = '';
-  $('c-keypath-label').hidden = true;
-  $('c-keypath').value = '';
+  pickedKey = null;
+  $('c-key-hint').hidden = true;
 }
 
 function enterEditMode(cred) {
@@ -346,11 +350,8 @@ function enterEditMode(cred) {
   const radio = document.querySelector(`input[name="c-auth"][value="${cred.authType || 'password'}"]`);
   if (radio) radio.checked = true;
   syncAuthRows();
+  $('c-keypath').value = cred.authType === 'key' ? (cred.keyPath || '') : '';
   resetKeyPick();
-  if (cred.authType === 'key' && cred.keyPath) {
-    $('c-keypath-label').hidden = false;
-    $('c-keypath').value = cred.keyPath;
-  }
   $('cred-submit').textContent = '更新认证';
   $('cred-cancel').hidden = false;
   $('view-creds').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -382,19 +383,26 @@ $('cred-cancel').addEventListener('click', () => {
   $('cred-error').hidden = true;
 });
 
-// Read the picked key file into memory for upload.
-let pickedKey = null;
+// The path box is the primary input. Picking a file is a shortcut that
+// uploads the key content instead (browsers cannot hand over the real path).
 $('c-keyfile').addEventListener('change', async () => {
   const file = ($('c-keyfile').files || [])[0];
   if (!file) {
-    pickedKey = null;
-    $('c-keypath-label').hidden = true;
-    $('c-keypath').value = '';
+    resetKeyPick();
     return;
   }
   pickedKey = new Uint8Array(await file.arrayBuffer());
-  $('c-keypath-label').hidden = false;
-  $('c-keypath').value = '已选择: ' + file.name + '（将在保存时上传）';
+  const hint = $('c-key-hint');
+  hint.textContent = '将上传所选文件，保存到本机 pf 目录。';
+  hint.hidden = false;
+});
+
+$('c-keypath').addEventListener('input', () => {
+  if ($('c-keyfile').files.length) {
+    $('c-keyfile').value = '';
+    pickedKey = null;
+  }
+  $('c-key-hint').hidden = true;
 });
 
 $('cred-form').addEventListener('submit', async (e) => {
@@ -409,7 +417,11 @@ $('cred-form').addEventListener('submit', async (e) => {
     authType: authType,
   };
   if (authType === 'key') {
-    if (pickedKey) payload.keyContent = Array.from(pickedKey);
+    if (pickedKey) {
+      payload.keyContent = Array.from(pickedKey);
+    } else {
+      payload.keyPath = $('c-keypath').value.trim();
+    }
   } else {
     payload.password = $('c-pass').value;
   }

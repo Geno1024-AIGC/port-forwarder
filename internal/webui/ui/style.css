@@ -370,6 +370,27 @@ input[type="text"], select {
 
 .btn-row { display: flex; gap: 10px; }
 
+.path-picker { display: flex; gap: 8px; align-items: stretch; }
+
+.path-picker input { flex: 1 1 auto; }
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.file-btn:hover { border-color: var(--muted); }
+
+.hint { font-size: 12px; color: var(--muted); }
+
 .probe-result { font-size: 12px; }
 .probe-result.ok { color: var(--ok); }
 .probe-result.err { color: var(--err); }

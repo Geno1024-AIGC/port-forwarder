@@ -94,13 +94,16 @@
               </div>
               <div class="form-row" id="c-key-row" hidden>
                 <label>
-                  选择私钥文件
-                  <input id="c-keyfile" name="ckeyfile" type="file" />
+                  私钥路径（可手动填写，也可选择文件）
+                  <div class="path-picker">
+                    <input id="c-keypath" name="ckeypath" placeholder="/root/.ssh/id_ed25519" />
+                    <label class="file-btn">
+                      选择文件
+                      <input id="c-keyfile" name="ckeyfile" type="file" hidden />
+                    </label>
+                  </div>
                 </label>
-                <label id="c-keypath-label" hidden>
-                  已保存位置
-                  <input id="c-keypath" name="ckeypath" readonly />
-                </label>
+                <span id="c-key-hint" class="hint" hidden></span>
               </div>
               <div id="cred-error" class="error-banner" hidden></div>
               <div class="btn-row">
