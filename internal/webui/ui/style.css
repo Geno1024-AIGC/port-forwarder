@@ -193,8 +193,8 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
   display: block;
 }
 
-.path-diagram .pb-node { font-size: 20px; font-weight: 700; fill: var(--text); }
-.path-diagram .pb-sub { font-size: 15px; fill: var(--muted); }
+.path-diagram .pb-node { font-size: 14px; font-weight: 700; fill: var(--text); }
+.path-diagram .pb-sub { font-size: 12px; fill: var(--muted); }
 .path-diagram rect { transition: filter .2s; }
 
 /* ——— in-form "fill-in-the-path" diagram ——— */
@@ -329,6 +329,8 @@ input[type="text"], select {
   align-items: center;
   margin-top: 8px;
 }
+
+.rule-actions { display: flex; gap: 8px; }
 
 .cred-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 

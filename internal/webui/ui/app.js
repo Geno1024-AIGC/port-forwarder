@@ -38,33 +38,42 @@ function renderDiagram(opts) {
   const listen = truncate(opts.listen || '—', 14);
   const target = truncate(opts.target || '—', 14);
   const status = opts.status;
+  const stroke = status === 'error' ? 'var(--err)' : 'var(--muted)';
 
-  const nodes = typ === 'remote'
+  const span = typ === 'remote'
     ? [
-        { label: '接入', sub: 'public', x: 20, y: 80, w: 120, h: 110 },
-        { label: '公网监听', sub: listen, x: 190, y: 80, w: 150, h: 110 },
-        { label: '隧道', sub: 'tunnel', x: 410, y: 52, w: 110, h: 160, accent: true },
-        { label: '转发器', sub: 'pf', x: 590, y: 80, w: 100, h: 110 },
-        { label: '目标', sub: target, x: 760, y: 80, w: 130, h: 110 },
+        { label: '接入', sub: 'public', w: 88 },
+        { label: '公网监听', sub: listen, w: 88 },
+        { label: '隧道', sub: 'tunnel', w: 88, accent: true },
+        { label: '转发器', sub: 'pf', w: 88 },
+        { label: '目标', sub: target, w: 112 },
       ]
     : [
-        { label: '接入', sub: 'client', x: 10, y: 80,  w: 100, h: 110 },
-        { label: '监听', sub: listen, x: 170, y: 80, w: 150, h: 110 },
-        { label: '转发器', sub: 'pf', x: 400, y: 52,  w: 110, h: 160, accent: true },
-        { label: '目标', sub: target, x: 600, y: 80,  w: 130, h: 110 },
+        { label: '接入', sub: 'client', w: 84 },
+        { label: '监听', sub: listen, w: 84 },
+        { label: '转发器', sub: 'pf', w: 84, accent: true },
+        { label: '目标', sub: target, w: 112 },
       ];
 
-  const W = typ === 'remote' ? 920 : 770;
-  const lane = typ === 'remote' ? 250 : 250;
-  const H = 300;
-  const stroke = status === 'error' ? 'var(--err)' : 'var(--muted)';
+  // All nodes share one vertical center so the connectors line up.
+  const LANE = 90;
+  const GAP = 34;
+  const H = LANE + 46; // extends below the lane for the arrow heads
+  const W = span.reduce((sum, n) => sum + n.w, 0) + GAP * span.length + 8;
+
+  let x = 4;
+  const nodes = span.map((n) => {
+    const o = { ...n, x, y: LANE - 42, h: 74 };
+    x += n.w + GAP;
+    return o;
+  });
 
   const nodeSvg = (n) => `
     <g>
-      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="16"
+      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="12"
             fill="${n.accent ? 'var(--accent)' : 'var(--panel)'}" stroke="${stroke}" stroke-width="2"/>
-      <text x="${n.x + n.w / 2}" y="${n.y + 45}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
-      <text x="${n.x + n.w / 2}" y="${n.y + 76}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
+      <text x="${n.x + n.w / 2}" y="${LANE - 12}" text-anchor="middle" class="pb-node">${escapeHtml(n.label)}</text>
+      <text x="${n.x + n.w / 2}" y="${LANE + 14}" text-anchor="middle" class="pb-sub">${escapeHtml(n.sub)}</text>
     </g>`;
 
   const segments = [];
@@ -72,12 +81,12 @@ function renderDiagram(opts) {
     const a = nodes[i], b = nodes[i + 1];
     const x1 = a.x + a.w, x2 = b.x;
     segments.push(`
-      <line x1="${x1}" y1="${lane}" x2="${x2}" y2="${lane}" stroke="${stroke}" stroke-width="2.5"
+      <line x1="${x1}" y1="${LANE}" x2="${x2}" y2="${LANE}" stroke="${stroke}" stroke-width="2.5"
             marker-end="url(#pf-head)"/>
       <g>${[0, 0.8].map((off, k) => `
         <circle r="5.5" fill="var(--accent)">
           <animateMotion dur="${Math.max(1.2, (x2 - x1) / 260).toFixed(1)}s" begin="${(i * 0.5 + k * 0.35).toFixed(2)}s" repeatCount="indefinite"
-            path="M ${x1} ${lane} H ${x2}"/>
+            path="M ${x1} ${LANE} H ${x2}"/>
         </circle>`).join('')}</g>`);
   }
 
@@ -136,7 +145,10 @@ function render(rules) {
     foot.className = 'rule-foot';
     foot.innerHTML = `
       <span class="mono">${escapeHtml(listStr)} → ${escapeHtml(targetStr)}</span>
-      <button class="danger" data-del="${escapeHtml(rule.id)}">删除</button>`;
+      <span class="rule-actions">
+        <button class="edit" data-edit-rule="${escapeHtml(rule.id)}">编辑</button>
+        <button class="danger" data-del="${escapeHtml(rule.id)}">删除</button>
+      </span>`;
     card.appendChild(foot);
 
     list.appendChild(card);
@@ -150,6 +162,50 @@ function render(rules) {
       await refresh();
     });
   }
+  for (const btn of container.querySelectorAll('[data-edit-rule]')) {
+    btn.addEventListener('click', () => enterRuleEdit(btn.dataset.editRule));
+  }
+}
+
+// ——— rule editing ————————————
+
+let editingRuleID = null;
+
+function enterRuleEdit(id) {
+  const rules = [];
+  $('rules').querySelectorAll('.rule-card');
+  api('/api/rules').then((list) => {
+    const rule = list.find((r) => r.id === id);
+    if (!rule) return;
+    editingRuleID = rule.id;
+    $('goal-type').value = rule.type || 'local';
+    $('name').value = rule.name || '';
+    $('listen').value = rule.listen || '';
+    $('target').value = rule.target || '';
+    syncTypeLabels();
+    syncCredRow();
+    updatePreviewFill();
+    const credSelect = $('credential');
+    if (rule.type === 'remote' && rule.credential && credSelect) {
+      credSelect.value = rule.credential;
+    }
+    $('form-submit-label').textContent = '更新规则';
+    $('form-cancel').hidden = false;
+    $('view-rules').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('name').focus();
+  });
+}
+
+function exitRuleEdit() {
+  editingRuleID = null;
+  const form = $('add-form');
+  form.reset();
+  $('goal-type').value = 'local';
+  syncTypeLabels();
+  syncCredRow();
+  updatePreviewFill();
+  if ($('form-submit-label')) $('form-submit-label').textContent = '添加';
+  $('form-cancel').hidden = true;
 }
 
 // ——— form —————————————————
@@ -204,26 +260,33 @@ form.addEventListener('submit', async (e) => {
     if (payload.type === 'remote') {
       const cred = $('credential').value;
       if (!cred) {
-        errBox.textContent = '请先在下方添加并选择认证信息。';
+        errBox.textContent = '请到「认证信息」页面先添加并选择认证信息。';
         errBox.hidden = false;
         return;
       }
       payload.credential = cred;
     }
-    const rule = await api('/api/rules', {
-      method: 'POST',
+    const opts = {
+      method: editingRuleID ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
-    form.reset();
+    };
+    const url = editingRuleID ? '/api/rules/' + editingRuleID : '/api/rules';
+    const rule = await api(url, opts);
+    exitRuleEdit();
     if (typeEl) typeEl.value = rule.type || 'local';
     updatePreviewFill();
     await refresh();
   } catch (err) {
-    errBox.textContent = '添加失败: ' + (err.message || 'unknown error');
+    errBox.textContent = '保存失败: ' + (err.message || 'unknown error');
     errBox.hidden = false;
     setStatus(false, 'error');
   }
+});
+
+$('form-cancel').addEventListener('click', () => {
+  exitRuleEdit();
+  $('form-error').hidden = true;
 });
 
 // ——— credentials ————————————

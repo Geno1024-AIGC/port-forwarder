@@ -62,7 +62,10 @@
                 <input id="name" name="name" placeholder="http-dev" required />
               </label>
               <div id="form-error" class="error-banner" hidden></div>
-              <button type="submit" class="primary">添加</button>
+              <div class="btn-row">
+                <button type="submit" class="primary"><span id="form-submit-label">添加</span></button>
+                <button type="button" class="secondary" id="form-cancel" hidden>取消</button>
+              </div>
             </form>
           </div>
 
