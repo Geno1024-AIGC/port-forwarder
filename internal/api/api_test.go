@@ -274,3 +274,37 @@ func TestDeleteMissingRule(t *testing.T) {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestUpdateRule(t *testing.T) {
+	ts := setup(t)
+
+	body := bytes.NewBufferString(`{"name":"echo","listen":"127.0.0.1:0","target":"127.0.0.1:1"}`)
+	resp, err := http.Post(ts.URL+"/api/rules", "application/json", body)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var created struct{ ID string }
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+
+	body = bytes.NewBufferString(`{"name":"renamed","listen":"127.0.0.1:0","target":"127.0.0.1:9"}`)
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/rules/"+created.ID, body)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("update status = %d, want 200", resp.StatusCode)
+	}
+	var updated map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode updated: %v", err)
+	}
+	if updated["name"] != "renamed" || updated["target"] != "127.0.0.1:9" {
+		t.Fatalf("updated rule mismatch: %+v", updated)
+	}
+}

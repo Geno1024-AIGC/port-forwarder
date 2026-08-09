@@ -152,6 +152,45 @@ func (e *Engine) Remove(id string) error {
 	return nil
 }
 
+// Update re-registers a rule with new forwarding details, preserving its ID.
+// It stops the old listener (local) or re-registers on the backend (remote).
+// Update re-registers a rule with new forwarding details, preserving its ID.
+// It stops the old listener (local) or re-registers on the backend (remote).
+func (e *Engine) Update(id, name, listen, target, credential string) (*Rule, error) {
+	e.mu.Lock()
+	r, ok := e.rules[id]
+	if !ok {
+		e.mu.Unlock()
+		return nil, errors.New("rule not found")
+	}
+	typ := r.Type
+	remote := e.remote
+
+	if typ == RuleTypeRemote {
+		r.Name, r.Listen, r.Target, r.Credential = name, listen, target, credential
+		r.Status = StatusPending
+		e.mu.Unlock()
+		if remote != nil {
+			remote.RemoveRemote(id)
+			remote.AddRemote(*r)
+		}
+		return r, nil
+	}
+
+	e.stopLocked(r)
+	r.Name, r.Listen, r.Target = name, listen, target
+	r.Status = StatusRunning
+	err := e.startLocked(r)
+	if err != nil {
+		r.Status = StatusError
+	}
+	e.mu.Unlock()
+	if err != nil {
+		return r, err
+	}
+	return r, nil
+}
+
 // UpdateRemoteStatus reflects the tunnel backend's report for a remote rule.
 // actualListen may carry the address the server actually bound; a non-nil
 // error marks the rule as failed.

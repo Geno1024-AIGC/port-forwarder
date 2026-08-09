@@ -26,6 +26,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/rules", s.listRules)
 	mux.HandleFunc("POST /api/rules", s.createRule)
 	mux.HandleFunc("DELETE /api/rules/{id}", s.deleteRule)
+	mux.HandleFunc("PUT /api/rules/{id}", s.updateRule)
 	mux.HandleFunc("POST /api/rules/{id}/restart", s.restartRule)
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/credentials", s.listCredentials)
@@ -86,6 +87,21 @@ func (s *Server) deleteRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) updateRule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req ruleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	rule, err := s.eng.Update(id, req.Name, req.Listen, req.Target, req.Credential)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rule)
 }
 
 func (s *Server) restartRule(w http.ResponseWriter, r *http.Request) {
