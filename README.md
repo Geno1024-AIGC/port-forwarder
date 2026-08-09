@@ -61,8 +61,8 @@ rules. In the web UI:
 Connections to `vps.example.com:7788` then reach `192.168.1.2:7777` through
 the SSH tunnel. Deleting a credential also removes every rule that used it.
 
-Credentials persist in `~/.config/pf/credentials.json` (0600). Rules are
-in-memory only.
+Credentials persist in `~/.config/pf/credentials.json` (0600). Rules persist in
+`~/.config/pf/rules.json` and are restored on the next daemon start (0600).
 
 ### Prerequisites on the public host
 

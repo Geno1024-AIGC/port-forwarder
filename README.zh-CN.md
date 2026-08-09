@@ -52,7 +52,7 @@ make test       # 运行测试套件
 
 此时访问 `vps.example.com:7788`，数据会通过 SSH 隧道到达内网的 `192.168.1.2:7777`。删除认证信息时，所有使用它的规则也会一并删除。
 
-凭据保存在 `~/.config/pf/credentials.json`（权限 0600）。规则仅保存在内存中。
+凭据保存在 `~/.config/pf/credentials.json`（权限 0600）。规则保存在 `~/.config/pf/rules.json`（权限 0600），daemon 重启时自动恢复。
 
 ### 公网主机的准备工作
 

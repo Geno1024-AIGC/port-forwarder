@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -148,7 +149,7 @@ func runClient(args []string) {
 		slog.Error("credentials", "err", err)
 		os.Exit(1)
 	}
-	serveAdminWeb(web, eng, sshx.NewManager(ctx, store))
+	serveAdminWeb(web, eng, sshx.NewManager(ctx, store), nil)
 }
 
 // clientBackend bridges engine.RemoteBackend and tunnel.Client.
@@ -179,8 +180,10 @@ func runLocal(args []string) {
 	fs := flag.NewFlagSet("local", flag.ExitOnError)
 	var web string
 	var credsPath string
+	var rulesPath string
 	fs.StringVar(&web, "web", ":28774", "address for the embedded web admin UI")
 	fs.StringVar(&credsPath, "creds", sshx.DefaultCredPath(), "file where SSH credentials are stored")
+	fs.StringVar(&rulesPath, "rules", defaultRulesPath(), "file where forwarding rules are stored")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "port-forwarder [flags]")
 		fs.PrintDefaults()
@@ -205,13 +208,32 @@ func runLocal(args []string) {
 	eng.SetErrorHandler(func(id string, err error) {
 		slog.Error("forward rule error", "id", id, "err", err)
 	})
-	serveAdminWeb(web, eng, mgr)
+
+	// Restore persisted rules so a daemon restart keeps the setup.
+	ruleStore := engine.NewStore(rulesPath)
+	if saved, err := ruleStore.List(); err != nil {
+		slog.Error("load rules", "err", err)
+	} else if len(saved) > 0 {
+		eng.Restore(saved)
+		slog.Info("restored rules", "count", len(saved))
+	}
+
+	serveAdminWeb(web, eng, mgr, ruleStore)
+}
+
+func defaultRulesPath() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "pf", "rules.json")
+	}
+	return filepath.Join(os.TempDir(), "pf-rules.json")
 }
 
 // serveAdminWeb hosts the rule-management UI plus REST API until a signal.
-func serveAdminWeb(addr string, eng *engine.Engine, mgr *sshx.Manager) {
+func serveAdminWeb(addr string, eng *engine.Engine, mgr *sshx.Manager, ruleStore *engine.Store) {
 	mux := http.NewServeMux()
-	mux.Handle("/api/", api.New(eng, mgr).Handler())
+	apiSrv := api.New(eng, mgr)
+	apiSrv.SetRuleStore(ruleStore)
+	mux.Handle("/api/", apiSrv.Handler())
 	mux.Handle("/ui/", http.StripPrefix("/ui/", webui.Handler()))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
 	slog.Info("web UI listening", "addr", addr)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -213,6 +214,13 @@ func (e *Engine) UpdateRemoteStatus(id, actualListen string, err error) {
 	r.Status = StatusRunning
 }
 
+// Get returns the rule with the given ID, or nil.
+func (e *Engine) Get(id string) *Rule {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.rules[id]
+}
+
 // List returns all rules, in creation order.
 func (e *Engine) List() []*Rule {
 	e.mu.Lock()
@@ -245,6 +253,47 @@ func (e *Engine) Restart() {
 			continue
 		}
 		r.Status = StatusRunning
+	}
+}
+
+// Restore re-registers persisted rules, reusing their IDs so the frontend
+// keeps stable handles. Each rule is (re)started like a fresh Add.
+func (e *Engine) Restore(rules []*Rule) {
+	for _, r := range rules {
+		e.mu.Lock()
+		if n, err := strconv.Atoi(r.ID); err == nil && n >= e.nextID {
+			e.nextID = n + 1
+		}
+		// Remember the ID inside the rule too; Add normally drops it.
+		r2 := &Rule{
+			ID:         r.ID,
+			Type:       r.Type,
+			Name:       r.Name,
+			Listen:     r.Listen,
+			Target:     r.Target,
+			Credential: r.Credential,
+		}
+		e.rules[r.ID] = r2
+		e.mu.Unlock()
+
+		if r.Type == RuleTypeRemote {
+			e.mu.Lock()
+			remote := e.remote
+			e.mu.Unlock()
+			if remote == nil {
+				e.setStatus(r2, StatusError)
+				continue
+			}
+			e.setStatus(r2, StatusPending)
+			remote.AddRemote(*r2)
+			continue
+		}
+		e.mu.Lock()
+		err := e.startLocked(r2)
+		if err != nil {
+			r2.Status = StatusError
+		}
+		e.mu.Unlock()
 	}
 }
 

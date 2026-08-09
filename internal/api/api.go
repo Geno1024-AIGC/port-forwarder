@@ -13,11 +13,29 @@ type Server struct {
 	eng   *engine.Engine
 	creds *sshx.Manager
 	store *sshx.CredStore
+	rules *engine.Store
 }
 
 // New creates an API server backed by eng and the SSH manager.
 func New(eng *engine.Engine, mgr *sshx.Manager) *Server {
 	return &Server{eng: eng, creds: mgr, store: mgr.Store()}
+}
+
+// SetRuleStore attaches a persistent rule store; every rule mutation is
+// written through so rules survive daemon restarts.
+func (s *Server) SetRuleStore(r *engine.Store) {
+	s.rules = r
+}
+
+func (s *Server) saveRules() {
+	if s.rules == nil {
+		return
+	}
+	if err := s.rules.Save(s.eng.List()); err != nil {
+		// Persistence failure should not kill the running rules.
+		// The UI still shows live state; only restart persistence is lost.
+		_ = err
+	}
 }
 
 // Handler returns the HTTP handler that serves the API routes.
@@ -78,6 +96,7 @@ func (s *Server) createRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	s.saveRules()
 	writeJSON(w, http.StatusCreated, rule)
 }
 
@@ -86,6 +105,7 @@ func (s *Server) deleteRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	s.saveRules()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -101,6 +121,7 @@ func (s *Server) updateRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	s.saveRules()
 	writeJSON(w, http.StatusOK, rule)
 }
 
