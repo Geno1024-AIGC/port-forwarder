@@ -179,10 +179,15 @@ function syncTypeLabels() {
   }
 }
 
+function syncCredRow() {
+  const typ = ($('goal-type') || {}).value || 'local';
+  $('cred-row').hidden = typ !== 'remote';
+}
+
 for (const id of ['listen', 'target']) {
   $(id).addEventListener('input', updatePreviewFill);
 }
-$('goal-type').addEventListener('change', syncTypeLabels);
+$('goal-type').addEventListener('change', () => { syncTypeLabels(); syncCredRow(); });
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -196,6 +201,15 @@ form.addEventListener('submit', async (e) => {
       listen: $('listen').value.trim(),
       target: $('target').value.trim(),
     };
+    if (payload.type === 'remote') {
+      const cred = $('credential').value;
+      if (!cred) {
+        errBox.textContent = '请先在下方添加并选择认证信息。';
+        errBox.hidden = false;
+        return;
+      }
+      payload.credential = cred;
+    }
     const rule = await api('/api/rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -209,6 +223,126 @@ form.addEventListener('submit', async (e) => {
     errBox.textContent = '添加失败: ' + (err.message || 'unknown error');
     errBox.hidden = false;
     setStatus(false, 'error');
+  }
+});
+
+// ——— credentials ————————————
+
+async function refreshCreds() {
+  const creds = await api('/api/credentials');
+  populateCredSelect(creds);
+  renderCreds(creds);
+}
+
+function populateCredSelect(creds) {
+  const sel = $('credential');
+  sel.innerHTML = '';
+  if (!creds.length) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = '（暂无认证，请先到下方添加）';
+    sel.appendChild(o);
+  } else {
+    for (const c of creds) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = `${c.name} (${c.host})`;
+      sel.appendChild(o);
+    }
+  }
+}
+
+function renderCreds(creds) {
+  const container = $('creds');
+  container.innerHTML = '';
+  if (!creds.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '暂无认证信息。';
+    container.appendChild(empty);
+    return;
+  }
+  const list = document.createElement('div');
+  list.className = 'cred-list';
+  for (const c of creds) {
+    const row = document.createElement('div');
+    row.className = 'cred-item';
+    row.innerHTML = `
+      <span class="cred-name">${escapeHtml(c.name || c.id)}</span>
+      <span class="mono">${escapeHtml(c.user)}@${escapeHtml(c.host)}</span>
+      <span class="badge">${escapeHtml(c.authType || 'password')}</span>
+      <button class="probe" data-probe="${escapeHtml(c.id)}">测试</button>
+      <button class="danger" data-del-cred="${escapeHtml(c.id)}">删除</button>
+      <span class="probe-result" data-probe-out></span>`;
+    list.appendChild(row);
+  }
+  container.appendChild(list);
+
+  for (const btn of container.querySelectorAll('[data-probe]')) {
+    btn.addEventListener('click', async () => {
+      const out = rowOf(btn);
+      out.textContent = '测试中…';
+      try {
+        await api('/api/credentials/' + btn.dataset.probe + '/probe', { method: 'POST' });
+        out.textContent = '成功';
+        out.classList.add('ok');
+      } catch (err) {
+        out.textContent = '失败: ' + (err.message || 'unknown');
+        out.classList.add('err');
+      }
+    });
+  }
+  for (const btn of container.querySelectorAll('[data-del-cred]')) {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('/api/credentials/' + btn.dataset.delCred, { method: 'DELETE' });
+        await refreshCreds();
+      } catch (err) {
+        alert('删除失败: ' + (err.message || err));
+      }
+    });
+  }
+}
+
+function rowOf(btn) {
+  return btn.closest('.cred-item').querySelector('[data-probe-out]');
+}
+
+$('c-auth').addEventListener('change', () => {
+  const key = $('c-auth').value === 'key';
+  $('c-key-row').hidden = !key;
+  $('c-pass-row').hidden = key;
+});
+
+$('cred-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errBox = $('cred-error');
+  errBox.hidden = true;
+  const payload = {
+    name: $('c-name').value.trim(),
+    host: $('c-host').value.trim(),
+    user: $('c-user').value.trim(),
+    authType: $('c-auth').value,
+  };
+  if (payload.authType === 'key') {
+    payload.keyPath = $('c-keypath').value.trim();
+  } else {
+    payload.password = $('c-pass').value;
+  }
+  try {
+    await api('/api/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    $('cred-form').reset();
+    $('c-auth').value = 'password';
+    $('c-key-row').hidden = true;
+    $('c-pass-row').hidden = false;
+    await refreshCreds();
+  } catch (err) {
+    errBox.textContent = '保存失败: ' + (err.message || 'unknown error');
+    errBox.hidden = false;
   }
 });
 
@@ -227,5 +361,7 @@ async function boot() {
 }
 
 syncTypeLabels();
+syncCredRow();
 updatePreviewFill();
+refreshCreds();
 boot();

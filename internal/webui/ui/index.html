@@ -25,6 +25,10 @@
             </select>
           </label>
         </div>
+        <label class="form-row" for="credential" id="cred-row" hidden>
+          认证信息
+          <select id="credential" name="credential"></select>
+        </label>
         <div class="path-form" id="path-form">
           <div class="pf-node pf-static">
             <span class="pf-kicker">接入</span>
@@ -57,6 +61,33 @@
     <section class="panel">
       <h2>规则列表</h2>
       <div id="rules"></div>
+    </section>
+
+    <section class="panel">
+      <h2>认证信息</h2>
+      <p class="hint">远程转发规则需要一个能登录公网 sshd 的认证信息。</p>
+      <form id="cred-form" class="cred-form" autocomplete="off">
+        <div class="form-row">
+          <label>名称 <input id="c-name" name="cname" placeholder="vps" required /></label>
+        </div>
+        <div class="form-row">
+          <label>主机 <input id="c-host" name="chost" placeholder="vps.example.com:22" required /></label>
+          <label>用户 <input id="c-user" name="cuser" placeholder="root" required /></label>
+        </div>
+        <div class="form-row">
+          <label>认证方式
+            <select id="c-auth">
+              <option value="password">密码</option>
+              <option value="key">SSH 私钥</option>
+            </select>
+          </label>
+          <label id="c-pass-row">密码<input id="c-pass" name="cpass" type="password" /></label>
+          <label id="c-key-row" hidden>私钥路径<input id="c-keypath" name="ckeypath" placeholder="/root/.ssh/id_ed25519" /></label>
+        </div>
+        <div id="cred-error" class="error-banner" hidden></div>
+        <button type="submit" class="primary">保存认证</button>
+      </form>
+      <div id="creds"></div>
     </section>
   </main>
 
