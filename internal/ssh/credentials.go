@@ -83,6 +83,24 @@ func (s *CredStore) Get(id string) (*Credential, bool) {
 	return c, ok
 }
 
+// SaveKey writes uploaded key material for a credential under the store
+// directory (0600) and returns the path. This keeps GUI-picked keys on disk
+// instead of inside the JSON file.
+func (s *CredStore) SaveKey(id string, content []byte) (string, error) {
+	if s.path == "" {
+		return "", fmt.Errorf("store has no file path")
+	}
+	dir := filepath.Join(filepath.Dir(s.path), "keys")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("mkdir keys: %w", err)
+	}
+	p := filepath.Join(dir, id)
+	if err := os.WriteFile(p, content, 0o600); err != nil {
+		return "", fmt.Errorf("write key: %w", err)
+	}
+	return p, nil
+}
+
 // Add assigns an ID and persists the new credential.
 func (s *CredStore) Add(c *Credential) (*Credential, error) {
 	s.mu.Lock()

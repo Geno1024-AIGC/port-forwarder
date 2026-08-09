@@ -31,6 +31,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/credentials", s.listCredentials)
 	mux.HandleFunc("POST /api/credentials", s.createCredential)
 	mux.HandleFunc("POST /api/credentials/{id}/probe", s.probeCredential)
+	mux.HandleFunc("PUT /api/credentials/{id}", s.updateCredential)
 	mux.HandleFunc("DELETE /api/credentials/{id}", s.deleteCredential)
 	return mux
 }
@@ -95,22 +96,111 @@ func (s *Server) restartRule(w http.ResponseWriter, r *http.Request) {
 
 // --- credentials -----------------------------------------------------------
 
+// credRequest is what the UI sends for create/update. KeyContent carries an
+// uploaded private key; when present it is saved to disk and KeyPath set to
+// the resulting file.
+type credRequest struct {
+	sshx.Credential
+	KeyContent []byte `json:"keyContent,omitempty"`
+}
+
 func (s *Server) listCredentials(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.store.List())
+	masked := make([]sshx.Credential, 0, len(s.store.List()))
+	for _, c := range s.store.List() {
+		masked = append(masked, *c)
+		if masked[len(masked)-1].AuthType == "password" {
+			masked[len(masked)-1].Password = ""
+		}
+	}
+	writeJSON(w, http.StatusOK, masked)
 }
 
 func (s *Server) createCredential(w http.ResponseWriter, r *http.Request) {
-	var c sshx.Credential
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+	var req credRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	got, err := s.store.Add(&c)
+	cred := &req.Credential
+	if cred.Name == "" || cred.Host == "" || cred.User == "" {
+		writeError(w, http.StatusBadRequest, "name, host and user are required")
+		return
+	}
+	if cred.AuthType != "key" && cred.AuthType != "password" {
+		writeError(w, http.StatusBadRequest, "authType must be key or password")
+		return
+	}
+	got, err := s.store.Add(cred)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	// Uploaded key material is written after the ID is known.
+	if len(req.KeyContent) > 0 {
+		if err := s.saveKey(&req, got.ID); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		got.KeyPath = req.KeyPath
+		if err := s.store.Update(got.ID, got); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, got)
+}
+
+func (s *Server) updateCredential(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, ok := s.store.Get(id); !ok {
+		writeError(w, http.StatusNotFound, "credential not found")
+		return
+	}
+	var req credRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	cred := &req.Credential
+	if cred.AuthType != "key" && cred.AuthType != "password" {
+		writeError(w, http.StatusBadRequest, "authType must be key or password")
+		return
+	}
+	// A password left blank on edit keeps the stored one.
+	if cred.AuthType == "password" && cred.Password == "" {
+		if old, ok := s.store.Get(id); ok {
+			cred.Password = old.Password
+		}
+	}
+	// No new key file chosen: keep the existing keyPath.
+	if len(req.KeyContent) == 0 && cred.AuthType == "key" && cred.KeyPath == "" {
+		if old, ok := s.store.Get(id); ok {
+			cred.KeyPath = old.KeyPath
+		}
+	}
+	if err := s.saveKey(&req, id); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.store.Update(id, cred); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	got, _ := s.store.Get(id)
+	writeJSON(w, http.StatusOK, got)
+}
+
+// saveKey writes uploaded key material under the store's key directory.
+func (s *Server) saveKey(req *credRequest, id string) error {
+	if len(req.KeyContent) == 0 {
+		return nil
+	}
+	p, err := s.store.SaveKey(id, req.KeyContent)
+	if err != nil {
+		return err
+	}
+	req.KeyPath = p
+	return nil
 }
 
 func (s *Server) probeCredential(w http.ResponseWriter, r *http.Request) {

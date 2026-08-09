@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/Geno1024-AIGC/port-forwarder/internal/engine"
@@ -182,6 +183,82 @@ func TestProbeMissingCredential(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateCredential(t *testing.T) {
+	ts := setup(t)
+
+	body := bytes.NewBufferString(`{"name":"vps","host":"vps.example.com:22","user":"root","authType":"password","password":"hunter2"}`)
+	resp, err := http.Post(ts.URL+"/api/credentials", "application/json", body)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var created sshx.Credential
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+
+	// Rename only; blank password should keep the stored value.
+	body = bytes.NewBufferString(`{"name":"renamed","host":"other:22","user":"root","authType":"password"}`)
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/credentials/"+created.ID, body)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("update status = %d, want 200", resp.StatusCode)
+	}
+	var updated sshx.Credential
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode updated: %v", err)
+	}
+	if updated.Name != "renamed" || updated.Host != "other:22" || updated.Password != "hunter2" {
+		t.Fatalf("updated credential mismatch: %+v", updated)
+	}
+}
+
+func TestCredentialKeyUpload(t *testing.T) {
+	ts := setup(t)
+
+	body := bytes.NewBufferString(`{"name":"vps","host":"vps.example.com:22","user":"root","authType":"key","keyContent":[49,50,51]}`)
+	resp, err := http.Post(ts.URL+"/api/credentials", "application/json", body)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", resp.StatusCode)
+	}
+	var created sshx.Credential
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if created.KeyPath == "" {
+		t.Fatal("expected keyPath set after upload")
+	}
+	data, err := os.ReadFile(created.KeyPath)
+	if err != nil {
+		t.Fatalf("read saved key: %v", err)
+	}
+	if string(data) != "123" {
+		t.Fatalf("saved key content = %q, want 123", data)
+	}
+
+	resp, err = http.Get(ts.URL + "/api/credentials")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	defer resp.Body.Close()
+	var list []sshx.Credential
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(list) == 0 || list[0].Password != "" {
+		t.Fatalf("password should be masked in list, got %+v", list)
 	}
 }
 
