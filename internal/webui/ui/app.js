@@ -42,17 +42,17 @@ function renderDiagram(opts) {
 
   const span = typ === 'remote'
     ? [
-        { label: '接入', sub: 'public', w: 66 },
-        { label: '公网监听', sub: listen, w: 66 },
-        { label: '隧道', sub: 'tunnel', w: 66, accent: true },
-        { label: '转发器', sub: 'pf', w: 66 },
-        { label: '目标', sub: target, w: 84 },
+        { label: '接入', sub: 'public', w: 84 },
+        { label: '公网监听', sub: listen, w: 104 },
+        { label: '隧道', sub: 'tunnel', w: 84, accent: true },
+        { label: '转发器', sub: 'pf', w: 84 },
+        { label: '目标', sub: target, w: 116 },
       ]
     : [
-        { label: '接入', sub: 'client', w: 64 },
-        { label: '监听', sub: listen, w: 64 },
-        { label: '转发器', sub: 'pf', w: 64, accent: true },
-        { label: '目标', sub: target, w: 84 },
+        { label: '接入', sub: 'client', w: 84 },
+        { label: '监听', sub: listen, w: 104 },
+        { label: '转发器', sub: 'pf', w: 84, accent: true },
+        { label: '目标', sub: target, w: 116 },
       ];
 
   // All nodes share one vertical center so the connectors line up.
