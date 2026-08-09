@@ -104,6 +104,8 @@ main {
   }
 }
 
+.view[hidden] { display: none; }
+
 .view {
   display: grid;
   grid-template-columns: 1fr;
